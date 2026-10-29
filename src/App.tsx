@@ -6,6 +6,7 @@ import { Header, type TabType } from './components/Header';
 import { IntakeParserView } from './components/IntakeParserView';
 import { ReceivablesView } from './components/ReceivablesView';
 import { TournamentsView } from './components/TournamentsView';
+import { BalanceTotalView } from './components/BalanceTotalView';
 import { BackupView } from './components/BackupView';
 
 export const App: React.FC = () => {
@@ -114,6 +115,15 @@ export const App: React.FC = () => {
             onDeleteTournament={handleDeleteTournament}
             onAddExpense={handleAddExpense}
             onDeleteExpense={handleDeleteExpense}
+          />
+        )}
+
+        {activeTab === 'balance' && (
+          <BalanceTotalView
+            sales={state.sales}
+            tournaments={state.tournaments}
+            expenses={state.expenses ?? []}
+            onNavigate={(tab) => setActiveTab(tab)}
           />
         )}
 
