@@ -11,7 +11,8 @@ export interface TournamentPnL {
 }
 
 export function tournamentPnL(t: Tournament): TournamentPnL {
-  const costs = t.entryFee + t.travelCost + t.otherCosts;
+  // Costs strictly based on tournament entry fee (viáticos and accessories excluded)
+  const costs = t.entryFee;
   const productRevenue = t.productPrizes.reduce((acc, p) => acc + p.quantity * p.unitValue, 0);
   const revenue = t.cashPrize + productRevenue;
   const net = revenue - costs;

@@ -15,11 +15,11 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, colgado
         <div className="brand-icon">⚡</div>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span className="brand-title">TCG Pro Ledger</span>
+            <span className="brand-title">Alemar - TCG</span>
             <span className="brand-badge">Vault PY</span>
           </div>
           <p style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-            Control Financiero, Dinero Colgado &amp; ROI de Torneos
+            Control Financiero, Cobranzas &amp; P&amp;L Competitivo
           </p>
         </div>
       </div>

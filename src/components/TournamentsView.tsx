@@ -6,30 +6,34 @@ import {
 } from '../domain/tournaments';
 import { formatGs } from '../domain/money';
 import { todayIso, newId } from '../domain/ledger';
-import type { Tournament, PrizeItem } from '../domain/schemas';
+import type { Tournament, PrizeItem, ExpenseItem } from '../domain/schemas';
 
 interface TournamentsViewProps {
   tournaments: Tournament[];
+  expenses: ExpenseItem[];
   onAddTournament: (tournament: Tournament) => void;
   onDeleteTournament: (id: string) => void;
+  onAddExpense: (expense: ExpenseItem) => void;
+  onDeleteExpense: (id: string) => void;
 }
 
 export const TournamentsView: React.FC<TournamentsViewProps> = ({
   tournaments,
+  expenses = [],
   onAddTournament,
   onDeleteTournament,
+  onAddExpense,
+  onDeleteExpense,
 }) => {
   const summary = seasonSummary(tournaments);
-  const [showForm, setShowForm] = useState(false);
+  const [showTournamentForm, setShowTournamentForm] = useState(false);
+  const [showExpenseForm, setShowExpenseForm] = useState(false);
 
-  // Form states
+  // Tournament Form states
   const [name, setName] = useState('');
   const [date, setDate] = useState(todayIso());
   const [game, setGame] = useState('Pokémon TCG');
-  const [format, setFormat] = useState('Standard');
   const [entryFee, setEntryFee] = useState('50000');
-  const [travelCost, setTravelCost] = useState('20000');
-  const [otherCosts, setOtherCosts] = useState('0');
   const [cashPrize, setCashPrize] = useState('0');
   const [standing, setStanding] = useState('');
   const [players, setPlayers] = useState('');
@@ -37,6 +41,15 @@ export const TournamentsView: React.FC<TournamentsViewProps> = ({
   const [productQty, setProductQty] = useState('1');
   const [productUnitValue, setProductUnitValue] = useState('35000');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Extra Expense Form states
+  const [expDesc, setExpDesc] = useState('');
+  const [expCategory, setExpCategory] = useState('Fundas');
+  const [expAmount, setExpAmount] = useState('65000');
+  const [expDate, setExpDate] = useState(todayIso());
+  const [expError, setExpError] = useState<string | null>(null);
+
+  const totalExpenses = expenses.reduce((acc, e) => acc + e.amount, 0);
 
   const handleSaveTournament = (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,8 +71,6 @@ export const TournamentsView: React.FC<TournamentsViewProps> = ({
     }
 
     const entryNum = parseInt(entryFee, 10) || 0;
-    const travelNum = parseInt(travelCost, 10) || 0;
-    const otherNum = parseInt(otherCosts, 10) || 0;
     const cashNum = parseInt(cashPrize, 10) || 0;
     const standingNum = standing ? parseInt(standing, 10) : undefined;
     const playersNum = players ? parseInt(players, 10) : undefined;
@@ -73,11 +84,8 @@ export const TournamentsView: React.FC<TournamentsViewProps> = ({
       id: newId(),
       name: name.trim(),
       date,
-      game,
-      format,
+      game: game.trim() || undefined,
       entryFee: entryNum,
-      travelCost: travelNum,
-      otherCosts: otherNum,
       cashPrize: cashNum,
       productPrizes,
       ...(standingNum ? { standing: standingNum } : {}),
@@ -85,10 +93,37 @@ export const TournamentsView: React.FC<TournamentsViewProps> = ({
     };
 
     onAddTournament(newTournament);
-    setShowForm(false);
+    setShowTournamentForm(false);
     setName('');
     setCashPrize('0');
     setProductDesc('');
+  };
+
+  const handleSaveExpense = (e: React.FormEvent) => {
+    e.preventDefault();
+    setExpError(null);
+    if (!expDesc.trim()) {
+      setExpError('Ingresa la descripción del accesorio/gasto.');
+      return;
+    }
+    const amountNum = parseInt(expAmount, 10);
+    if (isNaN(amountNum) || amountNum <= 0) {
+      setExpError('El monto debe ser mayor a 0.');
+      return;
+    }
+
+    const newExp: ExpenseItem = {
+      id: newId(),
+      description: expDesc.trim(),
+      category: expCategory,
+      amount: amountNum,
+      date: expDate,
+    };
+
+    onAddExpense(newExp);
+    setShowExpenseForm(false);
+    setExpDesc('');
+    setExpAmount('65000');
   };
 
   return (
@@ -119,11 +154,11 @@ export const TournamentsView: React.FC<TournamentsViewProps> = ({
         </div>
 
         <div className="kpi-card" style={{ borderColor: '#f87171' }}>
-          <div className="kpi-label">Costos &amp; Viáticos Invertidos</div>
+          <div className="kpi-label">Inscripciones a Torneos</div>
           <div className="kpi-value" style={{ color: '#f87171' }}>
             {formatGs(summary.costs)}
           </div>
-          <div className="kpi-subtitle">Inscripciones y transporte</div>
+          <div className="kpi-subtitle">Costo directo de entradas</div>
         </div>
 
         <div className="kpi-card cobrado">
@@ -137,18 +172,146 @@ export const TournamentsView: React.FC<TournamentsViewProps> = ({
         </div>
       </div>
 
-      {/* Action Bar */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
+      {/* Action Bar with Separate Tournament and Extra Expenses Buttons */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
+        <button
+          className="btn btn-outline"
+          onClick={() => {
+            setShowExpenseForm(!showExpenseForm);
+            if (showTournamentForm) setShowTournamentForm(false);
+          }}
+        >
+          {showExpenseForm ? 'Cerrar Gastos Extras' : '📦 Otros Gastos / Accesorios'}
+          {totalExpenses > 0 && (
+            <span style={{ fontSize: '0.75rem', background: '#334155', padding: '0.1rem 0.4rem', borderRadius: '4px', marginLeft: '0.3rem' }}>
+              {formatGs(totalExpenses)}
+            </span>
+          )}
+        </button>
+
         <button
           className="btn btn-primary"
-          onClick={() => setShowForm(!showForm)}
+          onClick={() => {
+            setShowTournamentForm(!showTournamentForm);
+            if (showExpenseForm) setShowExpenseForm(false);
+          }}
         >
-          {showForm ? 'Cerrar Formulario' : '➕ Registrar Torneo / Cup'}
+          {showTournamentForm ? 'Cerrar Formulario' : '➕ Registrar Torneo / Cup'}
         </button>
       </div>
 
-      {/* New Tournament Form */}
-      {showForm && (
+      {/* Extra Expenses Section/Modal */}
+      {showExpenseForm && (
+        <div className="card" style={{ borderColor: '#8b5cf6' }}>
+          <div className="card-title">
+            <span>📦 Registro de Otros Gastos &amp; Accesorios (Fuera de Torneos)</span>
+          </div>
+          <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginBottom: '1rem' }}>
+            Aquí puedes registrar compras de insumos para tu juego (fundas, playmats, dados, carpetas o cajas) sin alterar los costos individuales de inscripción de cada torneo.
+          </p>
+
+          {expError && (
+            <div style={{ background: 'var(--danger-bg)', padding: '0.75rem', borderRadius: '0.5rem', marginBottom: '1rem', color: '#f87171', fontSize: '0.85rem' }}>
+              {expError}
+            </div>
+          )}
+
+          <form onSubmit={handleSaveExpense} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+            <div>
+              <label style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Concepto / Descripción *</label>
+              <input
+                type="text"
+                placeholder="Ej: Fundas Dragon Shield Japanese"
+                value={expDesc}
+                onChange={(e) => setExpDesc(e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Categoría</label>
+              <select value={expCategory} onChange={(e) => setExpCategory(e.target.value)}>
+                <option value="Fundas">Fundas / Sleeves</option>
+                <option value="Playmat">Playmat</option>
+                <option value="Carpetas">Carpetas / Binders</option>
+                <option value="Deckbox">Deckbox / Cajas</option>
+                <option value="Dados">Dados / Contadores</option>
+                <option value="Otros">Otros Insumos</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Monto en Guaraníes (Gs) *</label>
+              <input
+                type="number"
+                value={expAmount}
+                onChange={(e) => setExpAmount(e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Fecha</label>
+              <input
+                type="date"
+                value={expDate}
+                onChange={(e) => setExpDate(e.target.value)}
+                required
+              />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+              <button type="submit" className="btn btn-success" style={{ width: '100%' }}>
+                💾 Agregar Gasto
+              </button>
+            </div>
+          </form>
+
+          {/* Expenses list */}
+          {expenses.length > 0 && (
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
+              <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.5rem', color: '#fff' }}>
+                Gastos Registrados ({expenses.length}) — Total: <span style={{ color: '#f87171' }}>{formatGs(totalExpenses)}</span>
+              </div>
+              <div className="table-wrapper">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Fecha</th>
+                      <th>Concepto</th>
+                      <th>Categoría</th>
+                      <th>Monto</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {expenses.map((exp) => (
+                      <tr key={exp.id}>
+                        <td style={{ color: '#94a3b8' }}>{exp.date}</td>
+                        <td style={{ fontWeight: 600, color: '#fff' }}>{exp.description}</td>
+                        <td>
+                          <span className="badge" style={{ background: 'rgba(139, 92, 246, 0.15)', color: '#a78bfa', border: '1px solid rgba(139, 92, 246, 0.3)' }}>
+                            {exp.category}
+                          </span>
+                        </td>
+                        <td style={{ fontWeight: 700, color: '#f87171' }}>{formatGs(exp.amount)}</td>
+                        <td>
+                          <button
+                            className="btn btn-outline"
+                            style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', color: '#ef4444' }}
+                            onClick={() => onDeleteExpense(exp.id)}
+                          >
+                            🗑️
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* New Tournament Form (Cleaned: No Viáticos, No Formato, Game kept) */}
+      {showTournamentForm && (
         <form className="card" onSubmit={handleSaveTournament}>
           <div className="card-title">Registrar Participación en Torneo</div>
 
@@ -163,7 +326,7 @@ export const TournamentsView: React.FC<TournamentsViewProps> = ({
               <label style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Nombre del Torneo / Tienda *</label>
               <input
                 type="text"
-                placeholder="Ej: League Cup San Lorenzo"
+                placeholder="Ej: One Piece Top 8 / League Cup"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
@@ -179,21 +342,13 @@ export const TournamentsView: React.FC<TournamentsViewProps> = ({
               />
             </div>
             <div>
-              <label style={{ fontSize: '0.75rem', color: '#94a3b8' }}>TCG &amp; Formato</label>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <input
-                  type="text"
-                  placeholder="Juego"
-                  value={game}
-                  onChange={(e) => setGame(e.target.value)}
-                />
-                <input
-                  type="text"
-                  placeholder="Formato"
-                  value={format}
-                  onChange={(e) => setFormat(e.target.value)}
-                />
-              </div>
+              <label style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Juego / TCG</label>
+              <input
+                type="text"
+                placeholder="Ej: One Piece TCG / Pokémon TCG"
+                value={game}
+                onChange={(e) => setGame(e.target.value)}
+              />
             </div>
             <div>
               <label style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Costo Inscripción (Gs)</label>
@@ -207,22 +362,6 @@ export const TournamentsView: React.FC<TournamentsViewProps> = ({
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
             <div>
-              <label style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Viáticos / Transporte (Gs)</label>
-              <input
-                type="number"
-                value={travelCost}
-                onChange={(e) => setTravelCost(e.target.value)}
-              />
-            </div>
-            <div>
-              <label style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Otros Gastos (Fundas, etc.)</label>
-              <input
-                type="number"
-                value={otherCosts}
-                onChange={(e) => setOtherCosts(e.target.value)}
-              />
-            </div>
-            <div>
               <label style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Premio en Efectivo (Gs)</label>
               <input
                 type="number"
@@ -231,37 +370,17 @@ export const TournamentsView: React.FC<TournamentsViewProps> = ({
                 onChange={(e) => setCashPrize(e.target.value)}
               />
             </div>
-            <div>
-              <label style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Standing / Posición vs Jugadores</label>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <input
-                  type="number"
-                  placeholder="Puesto (ej: 3)"
-                  value={standing}
-                  onChange={(e) => setStanding(e.target.value)}
-                />
-                <input
-                  type="number"
-                  placeholder="Total (ej: 32)"
-                  value={players}
-                  onChange={(e) => setPlayers(e.target.value)}
-                />
-              </div>
-            </div>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
             <div style={{ gridColumn: 'span 2' }}>
               <label style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Premios en Sobres / Cartas (Descripción)</label>
               <input
                 type="text"
-                placeholder="Ej: 4 Sobres Stellar Crown"
+                placeholder="Ej: 1x Promos y bulk / 4 Sobres OP-08"
                 value={productDesc}
                 onChange={(e) => setProductDesc(e.target.value)}
               />
             </div>
             <div>
-              <label style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Cantidad x Valor Unitario (Gs)</label>
+              <label style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Cantidad x Valor Estimado (Gs)</label>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <input
                   type="number"
@@ -280,11 +399,31 @@ export const TournamentsView: React.FC<TournamentsViewProps> = ({
             </div>
           </div>
 
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
+            <div>
+              <label style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Standing / Posición vs Jugadores</label>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <input
+                  type="number"
+                  placeholder="Puesto (ej: 8)"
+                  value={standing}
+                  onChange={(e) => setStanding(e.target.value)}
+                />
+                <input
+                  type="number"
+                  placeholder="Total (ej: 32)"
+                  value={players}
+                  onChange={(e) => setPlayers(e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
             <button
               type="button"
               className="btn btn-outline"
-              onClick={() => setShowForm(false)}
+              onClick={() => setShowTournamentForm(false)}
             >
               Cancelar
             </button>
@@ -311,8 +450,9 @@ export const TournamentsView: React.FC<TournamentsViewProps> = ({
               <thead>
                 <tr>
                   <th>Torneo &amp; Fecha</th>
+                  <th>Juego</th>
                   <th>Standing</th>
-                  <th>Costos</th>
+                  <th>Inscripción</th>
                   <th>Premios Obtenidos</th>
                   <th>P&amp;L Neto / ROI</th>
                   <th></th>
@@ -326,17 +466,22 @@ export const TournamentsView: React.FC<TournamentsViewProps> = ({
                       <td>
                         <div style={{ fontWeight: 700, color: '#fff' }}>{t.name}</div>
                         <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                          📅 {t.date} {t.format ? `• ${t.format}` : ''}
+                          📅 {t.date}
                         </div>
+                      </td>
+                      <td>
+                        <span className="badge" style={{ background: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8' }}>
+                          {t.game ?? 'TCG'}
+                        </span>
                       </td>
                       <td>
                         {t.standing ? (
                           <span
                             className="badge"
                             style={{
-                              background: t.standing <= 4 ? 'rgba(234, 179, 8, 0.2)' : 'rgba(255, 255, 255, 0.05)',
-                              color: t.standing <= 4 ? '#facc15' : '#cbd5e1',
-                              border: t.standing <= 4 ? '1px solid #facc15' : '1px solid #475569',
+                              background: t.standing <= 8 ? 'rgba(234, 179, 8, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                              color: t.standing <= 8 ? '#facc15' : '#cbd5e1',
+                              border: t.standing <= 8 ? '1px solid #facc15' : '1px solid #475569',
                             }}
                           >
                             Top {t.standing} {t.players ? `de ${t.players}` : ''}
@@ -347,9 +492,6 @@ export const TournamentsView: React.FC<TournamentsViewProps> = ({
                       </td>
                       <td>
                         <div style={{ color: '#f87171' }}>{formatGs(pnl.costs)}</div>
-                        <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                          Entr: {formatGs(t.entryFee)}
-                        </div>
                       </td>
                       <td>
                         <div style={{ color: '#10b981', fontWeight: 600 }}>

@@ -39,6 +39,7 @@ const SAMPLE_DATA: AppState = {
       payments: [{ id: 'p-3', amount: 900000, date: '2026-10-22', note: 'Al contado' }],
     },
   ],
+  expenses: [],
   tournaments: [
     {
       id: 'tour-1',

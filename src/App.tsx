@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { loadState, saveState } from './storage/store';
-import { emptyState, type AppState, type Sale, type Tournament } from './domain/schemas';
+import { emptyState, type AppState, type Sale, type Tournament, type ExpenseItem } from './domain/schemas';
 import { saleBalance } from './domain/ledger';
 import { Header, type TabType } from './components/Header';
 import { IntakeParserView } from './components/IntakeParserView';
@@ -62,6 +62,20 @@ export const App: React.FC = () => {
     }));
   };
 
+  const handleAddExpense = (newExp: ExpenseItem) => {
+    setState((prev) => ({
+      ...prev,
+      expenses: [newExp, ...(prev.expenses ?? [])],
+    }));
+  };
+
+  const handleDeleteExpense = (id: string) => {
+    setState((prev) => ({
+      ...prev,
+      expenses: (prev.expenses ?? []).filter((e) => e.id !== id),
+    }));
+  };
+
   const handleRestoreState = (newState: AppState) => {
     setState(newState);
   };
@@ -95,8 +109,11 @@ export const App: React.FC = () => {
         {activeTab === 'tournaments' && (
           <TournamentsView
             tournaments={state.tournaments}
+            expenses={state.expenses ?? []}
             onAddTournament={handleAddTournament}
             onDeleteTournament={handleDeleteTournament}
+            onAddExpense={handleAddExpense}
+            onDeleteExpense={handleDeleteExpense}
           />
         )}
 

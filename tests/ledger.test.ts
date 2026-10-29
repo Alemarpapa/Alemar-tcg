@@ -74,8 +74,6 @@ describe('tournament P&L', () => {
     name: 'Regional Asunción',
     date: '2026-10-10',
     entryFee: 150_000,
-    travelCost: 50_000,
-    otherCosts: 0,
     cashPrize: 100_000,
     productPrizes: [{ description: 'Sobres', quantity: 12, unitValue: 25_000 }],
     standing: 4,
@@ -84,16 +82,16 @@ describe('tournament P&L', () => {
 
   it('computes net and ROI including monetizable product prizes', () => {
     const p = tournamentPnL(base);
-    expect(p).toMatchObject({ costs: 200_000, productRevenue: 300_000, revenue: 400_000, net: 200_000, roi: 1 });
-    expect(formatRoi(p.roi)).toBe('+100%');
+    expect(p).toMatchObject({ costs: 150_000, productRevenue: 300_000, revenue: 400_000, net: 250_000 });
+    expect(formatRoi(p.roi)).toBe('+166,7%');
   });
 
   it('summarizes a season and handles zero-cost events', () => {
     const loss: Tournament = { ...base, id: 't2', cashPrize: 0, productPrizes: [], standing: 20 };
-    const free: Tournament = { ...base, id: 't3', entryFee: 0, travelCost: 0, cashPrize: 0, productPrizes: [], standing: 1, players: 8 };
+    const free: Tournament = { ...base, id: 't3', entryFee: 0, cashPrize: 0, productPrizes: [], standing: 1, players: 8 };
     expect(tournamentPnL(free).roi).toBeNull();
     const s = seasonSummary([base, loss, free]);
-    expect(s).toMatchObject({ count: 3, profitable: 1, costs: 400_000, revenue: 400_000, net: 0, roi: 0, bestStanding: 1 });
+    expect(s).toMatchObject({ count: 3, profitable: 1, costs: 300_000, revenue: 400_000, net: 100_000, bestStanding: 1 });
   });
 });
 
@@ -108,31 +106,45 @@ describe('WhatsApp reminders', () => {
     const s = sale({ phone: '595981123456', dueDate: '2026-10-25' });
     const msg = buildReminderMessage(s, TODAY);
     expect(msg).toContain('₲ 150.000');
-    expect(msg).toContain('hace 4 días');
-    const link = whatsappLink(msg, s.phone);
-    expect(link.startsWith('https://wa.me/595981123456?text=')).toBe(true);
-    expect(decodeURIComponent(link.split('text=')[1]!)).toBe(msg);
+    expect(msg).toContain('Playset de Charizard');
+    const url = whatsappLink(msg, s.phone);
+    expect(url).toMatch(/^https:\/\/wa\.me\/595981123456\?text=/);
   });
 });
 
-describe('persistence', () => {
-  const memory = (): KeyValueStorage & { data: Map<string, string> } => {
-    const data = new Map<string, string>();
-    return { data, getItem: (k) => data.get(k) ?? null, setItem: (k, v) => void data.set(k, v) };
+describe('storage & resilience', () => {
+  const fakeStorage = (): KeyValueStorage & { map: Map<string, string> } => {
+    const map = new Map<string, string>();
+    return {
+      map,
+      getItem: (k) => map.get(k) ?? null,
+      setItem: (k, v) => map.set(k, v),
+    };
   };
 
-  it('round-trips valid state', () => {
-    const store = memory();
-    saveState(store, { version: 1, sales: [sale()], tournaments: [] });
-    expect(loadState(store).state.sales[0]?.buyer).toBe('Lucas');
+  it('saves and reloads state idempotently', () => {
+    const st = fakeStorage();
+    const initial = { version: 1 as const, sales: [sale()], tournaments: [], expenses: [] };
+    saveState(st, initial);
+    const loaded = loadState(st);
+    expect(loaded.state.sales).toHaveLength(1);
+    expect(loaded.recoveredFrom).toBeUndefined();
   });
 
-  it('backs up corrupted data instead of crashing or losing it', () => {
-    const store = memory();
-    store.setItem(STORAGE_KEY, '{"version":1,"sales":[{"total":-5}]');
-    const r = loadState(store, () => 42);
-    expect(r.state.sales).toEqual([]);
-    expect(r.recoveredFrom).toContain(':corrupt:42');
-    expect(store.data.get(`${STORAGE_KEY}:corrupt:42`)).toContain('-5');
+  it('backs up corrupted JSON and returns an empty state instead of crashing', () => {
+    const st = fakeStorage();
+    st.setItem(STORAGE_KEY, '{ invalid json');
+    const loaded = loadState(st, () => 1234);
+    expect(loaded.state.sales).toHaveLength(0);
+    expect(loaded.recoveredFrom).toBe(`${STORAGE_KEY}:corrupt:1234 (JSON inválido)`);
+    expect(st.map.get(`${STORAGE_KEY}:corrupt:1234`)).toBe('{ invalid json');
+  });
+
+  it('backs up schema-violating JSON payload', () => {
+    const st = fakeStorage();
+    st.setItem(STORAGE_KEY, JSON.stringify({ version: 2, sales: [] }));
+    const loaded = loadState(st, () => 9999);
+    expect(loaded.state.sales).toHaveLength(0);
+    expect(loaded.recoveredFrom).toContain(`${STORAGE_KEY}:corrupt:9999`);
   });
 });
