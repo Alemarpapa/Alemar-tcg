@@ -1,7 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { loadState, saveState } from './storage/store';
-import { emptyState, type AppState, type Sale, type Tournament, type ExpenseItem } from './domain/schemas';
-import { saleBalance } from './domain/ledger';
+import {
+  emptyState,
+  type AppState,
+  type Sale,
+  type Tournament,
+  type ExpenseItem,
+  type InventoryItem,
+} from './domain/schemas';
+import { saleBalance, todayIso, newId } from './domain/ledger';
 import { Header, type TabType } from './components/Header';
 import { IntakeParserView } from './components/IntakeParserView';
 import { ReceivablesView } from './components/ReceivablesView';
@@ -77,11 +84,75 @@ export const App: React.FC = () => {
     }));
   };
 
+  const handleAddInventory = (item: InventoryItem) => {
+    setState((prev) => ({
+      ...prev,
+      inventory: [item, ...(prev.inventory ?? [])],
+    }));
+  };
+
+  const handleUpdateInventory = (updated: InventoryItem) => {
+    setState((prev) => ({
+      ...prev,
+      inventory: (prev.inventory ?? []).map((i) => (i.id === updated.id ? updated : i)),
+    }));
+  };
+
+  const handleDeleteInventory = (id: string) => {
+    setState((prev) => ({
+      ...prev,
+      inventory: (prev.inventory ?? []).filter((i) => i.id !== id),
+    }));
+  };
+
+  const handleConvertInventoryToSale = (
+    item: InventoryItem,
+    buyer: string,
+    paidAmount: number,
+    phone?: string,
+    dueDate?: string,
+  ) => {
+    const today = todayIso();
+    const payments =
+      paidAmount > 0
+        ? [
+            {
+              id: newId(),
+              amount: paidAmount,
+              date: today,
+              note: 'Cobro inicial al pasar de stock a venta',
+            },
+          ]
+        : [];
+
+    const newSale: Sale = {
+      id: newId(),
+      buyer,
+      item: item.description,
+      total: item.price,
+      payments,
+      createdAt: today,
+      dueDate,
+      phone,
+      notes: item.notes ? `Vendido desde stock: ${item.notes}` : undefined,
+    };
+
+    setState((prev) => ({
+      ...prev,
+      sales: [newSale, ...prev.sales],
+      inventory: (prev.inventory ?? []).map((i) =>
+        i.id === item.id ? { ...i, status: 'vendido' } : i,
+      ),
+    }));
+  };
+
   const handleRestoreState = (newState: AppState) => {
     setState(newState);
   };
 
-  const colgadoCount = state.sales.filter((s) => saleBalance(s) > 0).length;
+  const debtCount = state.sales.filter((s) => saleBalance(s) > 0).length;
+  const stockCount = (state.inventory ?? []).filter((i) => i.status !== 'vendido').length;
+  const colgadoCount = debtCount + stockCount;
 
   return (
     <div className="app-container">
@@ -102,8 +173,13 @@ export const App: React.FC = () => {
         {activeTab === 'receivables' && (
           <ReceivablesView
             sales={state.sales}
+            inventory={state.inventory ?? []}
             onUpdateSale={handleUpdateSale}
             onDeleteSale={handleDeleteSale}
+            onAddInventory={handleAddInventory}
+            onUpdateInventory={handleUpdateInventory}
+            onDeleteInventory={handleDeleteInventory}
+            onConvertInventoryToSale={handleConvertInventoryToSale}
           />
         )}
 
@@ -123,6 +199,7 @@ export const App: React.FC = () => {
             sales={state.sales}
             tournaments={state.tournaments}
             expenses={state.expenses ?? []}
+            inventory={state.inventory ?? []}
             onNavigate={(tab) => setActiveTab(tab)}
           />
         )}

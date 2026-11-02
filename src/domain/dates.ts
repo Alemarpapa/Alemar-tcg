@@ -43,6 +43,17 @@ const WEEKDAYS: Record<string, number> = {
 
 const stripAccents = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '');
 
+export function formatMonthYear(yearMonth: string): string {
+  const [y, m] = yearMonth.split('-');
+  const months = [
+    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+  ];
+  const idx = Number(m) - 1;
+  const name = months[idx] ?? m;
+  return `${name} ${y}`;
+}
+
 export interface DateMatch {
   date: IsoDate;
   /** The exact fragment of text that produced the date. */

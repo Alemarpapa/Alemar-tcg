@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  calculateMonthSummary,
   collectedThisMonth,
   createSaleFromDraft,
   registerPayment,
   saleBalance,
   saleStatus,
+  summarizeInventory,
   summarizeReceivables,
 } from '../src/domain/ledger';
 import type { Sale } from '../src/domain/schemas';
@@ -124,7 +126,7 @@ describe('storage & resilience', () => {
 
   it('saves and reloads state idempotently', () => {
     const st = fakeStorage();
-    const initial = { version: 1 as const, sales: [sale()], tournaments: [], expenses: [] };
+    const initial = { version: 1 as const, sales: [sale()], tournaments: [], expenses: [], inventory: [] };
     saveState(st, initial);
     const loaded = loadState(st);
     expect(loaded.state.sales).toHaveLength(1);
@@ -146,5 +148,62 @@ describe('storage & resilience', () => {
     const loaded = loadState(st, () => 9999);
     expect(loaded.state.sales).toHaveLength(0);
     expect(loaded.recoveredFrom).toContain(`${STORAGE_KEY}:corrupt:9999`);
+  });
+});
+
+describe('monthly balances & inventory stock', () => {
+  it('calculates monthly summary with sales, tournament prizes, and expenses', () => {
+    const s1 = sale({
+      createdAt: '2026-11-01',
+      total: 300_000,
+      payments: [{ id: 'p1', amount: 150_000, date: '2026-11-02' }],
+    });
+    const s2 = sale({
+      createdAt: '2026-10-15',
+      total: 200_000,
+      payments: [{ id: 'p2', amount: 200_000, date: '2026-10-16' }],
+    });
+    const tour1: Tournament = {
+      id: 't1',
+      name: 'Torneo Noviembre',
+      date: '2026-11-05',
+      entryFee: 30_000,
+      cashPrize: 80_000,
+      productPrizes: [{ description: 'Sobres', quantity: 2, unitValue: 25_000 }],
+    };
+    const expenses = [
+      { id: 'e1', description: 'Fundas Katana', category: 'Accesorios', amount: 45_000, date: '2026-11-03' },
+      { id: 'e2', description: 'Playmat', category: 'Accesorios', amount: 100_000, date: '2026-10-10' },
+    ];
+
+    const nov = calculateMonthSummary('2026-11', [s1, s2], [tour1], expenses);
+    expect(nov.salesCollected).toBe(150_000);
+    expect(nov.tournamentCash).toBe(80_000);
+    expect(nov.tournamentProduct).toBe(50_000);
+    expect(nov.tournamentCosts).toBe(30_000);
+    expect(nov.expenses).toBe(45_000);
+    // totalRevenue = 150k + 80k + 50k = 280k
+    // totalCosts = 30k + 45k = 75k
+    // net = 280k - 75k = 205k
+    expect(nov.totalRevenue).toBe(280_000);
+    expect(nov.totalCosts).toBe(75_000);
+    expect(nov.net).toBe(205_000);
+    expect(nov.liquidNet).toBe(155_000); // 150k + 80k - 75k = 155k
+  });
+
+  it('summarizes inventory stock (available, reserved, sold)', () => {
+    const items = [
+      { id: '1', description: 'Carpeta Ultra Pro 9 bolsillos', category: 'Carpeta', price: 150_000, status: 'disponible' as const, createdAt: '2026-11-01' },
+      { id: '2', description: 'Charizard ex SAR', category: 'Carta Suelta', price: 200_000, status: 'reservado' as const, createdAt: '2026-11-02' },
+      { id: '3', description: 'Mew ex', category: 'Carta Suelta', price: 80_000, status: 'vendido' as const, createdAt: '2026-10-10' },
+    ];
+
+    const summary = summarizeInventory(items);
+    // Active stock value = 150_000 + 200_000 = 350_000
+    expect(summary.totalValue).toBe(350_000);
+    expect(summary.availableCount).toBe(1);
+    expect(summary.reservedCount).toBe(1);
+    expect(summary.soldCount).toBe(1);
+    expect(summary.count).toBe(3);
   });
 });

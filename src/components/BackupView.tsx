@@ -69,6 +69,17 @@ const SAMPLE_DATA: AppState = {
       players: 24,
     },
   ],
+  inventory: [
+    {
+      id: 'demo-inv-1',
+      description: 'Carpeta Ultra Pro 9 bolsillos con hojas',
+      category: 'Carpeta',
+      price: 150000,
+      status: 'disponible',
+      createdAt: '2026-10-28',
+      notes: 'Color negro, 20 hojas incluidas',
+    },
+  ],
 };
 
 export const BackupView: React.FC<BackupViewProps> = ({ state, onRestoreState }) => {

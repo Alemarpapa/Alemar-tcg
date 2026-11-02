@@ -1,11 +1,15 @@
-import { addDays, daysBetween, fromIsoDate, toIsoDate, type IsoDate } from './dates';
+import { addDays, daysBetween, formatMonthYear, fromIsoDate, toIsoDate, type IsoDate } from './dates';
 import {
   SaleSchema,
   issueMessages,
+  type ExpenseItem,
+  type InventoryItem,
   type Payment,
   type Sale,
   type SaleDraft,
+  type Tournament,
 } from './schemas';
+import { tournamentPnL } from './tournaments';
 
 export type SaleStatus = 'pagado' | 'vencido' | 'por_vencer' | 'pendiente';
 
@@ -141,6 +145,127 @@ export function collectedThisMonth(sales: Sale[], today: IsoDate): number {
     (acc, s) => acc + s.payments.filter((p) => p.date.startsWith(prefix)).reduce((a, p) => a + p.amount, 0),
     0,
   );
+}
+
+export interface MonthSummary {
+  month: string; // YYYY-MM
+  monthLabel: string; // e.g. "Noviembre 2026"
+  salesCollected: number;
+  salesBilled: number;
+  tournamentCash: number;
+  tournamentProduct: number;
+  tournamentCosts: number;
+  tournamentNet: number;
+  expenses: number;
+  totalRevenue: number;
+  totalCosts: number;
+  net: number;
+  liquidNet: number;
+}
+
+export function calculateMonthSummary(
+  month: string,
+  sales: Sale[],
+  tournaments: Tournament[],
+  expenses: ExpenseItem[],
+): MonthSummary {
+  const salesCollected = sales.reduce(
+    (acc, s) => acc + s.payments.filter((p) => p.date.startsWith(month)).reduce((a, p) => a + p.amount, 0),
+    0,
+  );
+
+  const salesBilled = sales.filter((s) => s.createdAt.startsWith(month)).reduce((acc, s) => acc + s.total, 0);
+
+  const tournamentsInMonth = tournaments.filter((t) => t.date.startsWith(month));
+  let tournamentCash = 0;
+  let tournamentProduct = 0;
+  let tournamentCosts = 0;
+  for (const t of tournamentsInMonth) {
+    const p = tournamentPnL(t);
+    tournamentCash += p.cashRevenue;
+    tournamentProduct += p.productRevenue;
+    tournamentCosts += p.costs;
+  }
+  const tournamentNet = (tournamentCash + tournamentProduct) - tournamentCosts;
+
+  const expensesInMonth = expenses.filter((e) => e.date.startsWith(month));
+  const expensesAmount = expensesInMonth.reduce((acc, e) => acc + e.amount, 0);
+
+  const totalRevenue = salesCollected + tournamentCash + tournamentProduct;
+  const totalCosts = tournamentCosts + expensesAmount;
+  const net = totalRevenue - totalCosts;
+  const liquidNet = (salesCollected + tournamentCash) - totalCosts;
+
+  return {
+    month,
+    monthLabel: formatMonthYear(month),
+    salesCollected,
+    salesBilled,
+    tournamentCash,
+    tournamentProduct,
+    tournamentCosts,
+    tournamentNet,
+    expenses: expensesAmount,
+    totalRevenue,
+    totalCosts,
+    net,
+    liquidNet,
+  };
+}
+
+export function getAllMonths(
+  sales: Sale[],
+  tournaments: Tournament[],
+  expenses: ExpenseItem[],
+  today: IsoDate,
+): string[] {
+  const set = new Set<string>();
+  set.add(today.slice(0, 7));
+  for (const s of sales) {
+    if (s.createdAt) set.add(s.createdAt.slice(0, 7));
+    for (const p of s.payments) {
+      if (p.date) set.add(p.date.slice(0, 7));
+    }
+  }
+  for (const t of tournaments) {
+    if (t.date) set.add(t.date.slice(0, 7));
+  }
+  for (const e of expenses) {
+    if (e.date) set.add(e.date.slice(0, 7));
+  }
+  return Array.from(set)
+    .filter((m) => /^\d{4}-\d{2}$/.test(m))
+    .sort((a, b) => b.localeCompare(a));
+}
+
+export interface InventorySummary {
+  totalValue: number;
+  count: number;
+  availableCount: number;
+  reservedCount: number;
+  soldCount: number;
+  available: InventoryItem[];
+  reserved: InventoryItem[];
+  sold: InventoryItem[];
+}
+
+export function summarizeInventory(items: InventoryItem[] = []): InventorySummary {
+  const available = items.filter((i) => i.status === 'disponible');
+  const reserved = items.filter((i) => i.status === 'reservado');
+  const sold = items.filter((i) => i.status === 'vendido');
+  const active = items.filter((i) => i.status !== 'vendido');
+  const totalValue = active.reduce((acc, i) => acc + i.price, 0);
+
+  return {
+    totalValue,
+    count: items.length,
+    availableCount: available.length,
+    reservedCount: reserved.length,
+    soldCount: sold.length,
+    available,
+    reserved,
+    sold,
+  };
 }
 
 export const todayIso = (): IsoDate => toIsoDate(new Date());

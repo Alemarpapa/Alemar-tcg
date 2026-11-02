@@ -129,11 +129,24 @@ export const ExpenseItemSchema = z.object({
   date: IsoDateSchema,
 });
 
+/** Inventory / unsold items (binders, singles, lots, etc.) waiting to be sold for a target price. */
+export const InventoryItemSchema = z.object({
+  id: z.string().min(1),
+  description: z.string().trim().min(1, 'Falta la descripción del artículo').max(120),
+  category: z.string().trim().default('Carpeta'),
+  price: PositiveAmountSchema,
+  cost: AmountSchema.optional(),
+  status: z.enum(['disponible', 'reservado', 'vendido']).default('disponible'),
+  createdAt: IsoDateSchema,
+  notes: z.string().max(300).optional(),
+});
+
 export const AppStateSchema = z.object({
   version: z.literal(1),
   sales: z.array(SaleSchema),
   tournaments: z.array(TournamentSchema),
   expenses: z.array(ExpenseItemSchema).default([]),
+  inventory: z.array(InventoryItemSchema).default([]),
 });
 
 export type Payment = z.infer<typeof PaymentSchema>;
@@ -142,9 +155,16 @@ export type SaleDraft = z.infer<typeof SaleDraftSchema>;
 export type PrizeItem = z.infer<typeof PrizeItemSchema>;
 export type Tournament = z.infer<typeof TournamentSchema>;
 export type ExpenseItem = z.infer<typeof ExpenseItemSchema>;
+export type InventoryItem = z.infer<typeof InventoryItemSchema>;
 export type AppState = z.infer<typeof AppStateSchema>;
 
-export const emptyState = (): AppState => ({ version: 1, sales: [], tournaments: [], expenses: [] });
+export const emptyState = (): AppState => ({
+  version: 1,
+  sales: [],
+  tournaments: [],
+  expenses: [],
+  inventory: [],
+});
 
 /** Flattens Zod issues into human-readable Spanish messages. */
 export function issueMessages(error: z.ZodError): string[] {
