@@ -3,6 +3,7 @@ import {
   SaleSchema,
   issueMessages,
   type ExpenseItem,
+  type Purchase,
   type InventoryItem,
   type Payment,
   type Sale,
@@ -157,6 +158,7 @@ export interface MonthSummary {
   tournamentCosts: number;
   tournamentNet: number;
   expenses: number;
+  reinvestment: number;
   totalRevenue: number;
   totalCosts: number;
   net: number;
@@ -168,6 +170,7 @@ export function calculateMonthSummary(
   sales: Sale[],
   tournaments: Tournament[],
   expenses: ExpenseItem[],
+  purchases: Purchase[] = [],
 ): MonthSummary {
   const salesCollected = sales.reduce(
     (acc, s) => acc + s.payments.filter((p) => p.date.startsWith(month)).reduce((a, p) => a + p.amount, 0),
@@ -191,8 +194,11 @@ export function calculateMonthSummary(
   const expensesInMonth = expenses.filter((e) => e.date.startsWith(month));
   const expensesAmount = expensesInMonth.reduce((acc, e) => acc + e.amount, 0);
 
+  // Cash basis: a lot purchase is money out now; its cards come back as sales when sold.
+  const reinvestment = purchases.filter((p) => p.date.startsWith(month)).reduce((acc, p) => acc + p.amount, 0);
+
   const totalRevenue = salesCollected + tournamentCash + tournamentProduct;
-  const totalCosts = tournamentCosts + expensesAmount;
+  const totalCosts = tournamentCosts + expensesAmount + reinvestment;
   const net = totalRevenue - totalCosts;
   const liquidNet = (salesCollected + tournamentCash) - totalCosts;
 
@@ -206,6 +212,7 @@ export function calculateMonthSummary(
     tournamentCosts,
     tournamentNet,
     expenses: expensesAmount,
+    reinvestment,
     totalRevenue,
     totalCosts,
     net,
@@ -218,6 +225,7 @@ export function getAllMonths(
   tournaments: Tournament[],
   expenses: ExpenseItem[],
   today: IsoDate,
+  purchases: Purchase[] = [],
 ): string[] {
   const set = new Set<string>();
   set.add(today.slice(0, 7));
@@ -230,7 +238,7 @@ export function getAllMonths(
   for (const t of tournaments) {
     if (t.date) set.add(t.date.slice(0, 7));
   }
-  for (const e of expenses) {
+  for (const e of [...expenses, ...purchases]) {
     if (e.date) set.add(e.date.slice(0, 7));
   }
   return Array.from(set)
@@ -265,6 +273,30 @@ export function summarizeInventory(items: InventoryItem[] = []): InventorySummar
     available,
     reserved,
     sold,
+  };
+}
+
+export interface PurchaseSummary {
+  invested: number;
+  /** Expected sale value of this lot's cards still in stock. */
+  stockValue: number;
+  /** Sale value of this lot's cards already sold. */
+  soldValue: number;
+  /** soldValue - invested: negative until the lot pays for itself. */
+  recovered: number;
+  itemCount: number;
+}
+
+export function summarizePurchase(purchase: Purchase, inventory: InventoryItem[] = []): PurchaseSummary {
+  const items = inventory.filter((i) => i.purchaseId === purchase.id);
+  const sum = (list: InventoryItem[]) => list.reduce((acc, i) => acc + i.price, 0);
+  const soldValue = sum(items.filter((i) => i.status === 'vendido'));
+  return {
+    invested: purchase.amount,
+    stockValue: sum(items.filter((i) => i.status !== 'vendido')),
+    soldValue,
+    recovered: soldValue - purchase.amount,
+    itemCount: items.length,
   };
 }
 

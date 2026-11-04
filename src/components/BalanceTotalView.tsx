@@ -8,13 +8,14 @@ import {
 } from '../domain/ledger';
 import { seasonSummary } from '../domain/tournaments';
 import { formatGs } from '../domain/money';
-import type { Sale, Tournament, ExpenseItem, InventoryItem } from '../domain/schemas';
+import type { Sale, Tournament, ExpenseItem, InventoryItem, Purchase } from '../domain/schemas';
 
 interface BalanceTotalViewProps {
   sales: Sale[];
   tournaments: Tournament[];
   expenses: ExpenseItem[];
   inventory?: InventoryItem[];
+  purchases?: Purchase[];
   onNavigate: (tab: 'intake' | 'receivables' | 'tournaments') => void;
 }
 
@@ -23,13 +24,14 @@ export const BalanceTotalView: React.FC<BalanceTotalViewProps> = ({
   tournaments,
   expenses = [],
   inventory = [],
+  purchases = [],
   onNavigate,
 }) => {
   const today = todayIso();
   const currentMonthKey = today.slice(0, 7);
 
   // Period selector: defaults to current month (YYYY-MM) or 'all'
-  const allMonths = getAllMonths(sales, tournaments, expenses, today);
+  const allMonths = getAllMonths(sales, tournaments, expenses, today, purchases);
   const [selectedMonth, setSelectedMonth] = useState<string>(currentMonthKey);
 
   const isAllTime = selectedMonth === 'all';
@@ -42,6 +44,7 @@ export const BalanceTotalView: React.FC<BalanceTotalViewProps> = ({
   // Global tour & expenses (for all-time)
   const tourAll = seasonSummary(tournaments);
   const totalExpensesAll = expenses.reduce((acc, e) => acc + e.amount, 0);
+  const totalReinvestAll = purchases.reduce((acc, p) => acc + p.amount, 0);
 
   // Current selected month summary (or aggregate if all-time)
   const monthData = calculateMonthSummary(
@@ -49,6 +52,7 @@ export const BalanceTotalView: React.FC<BalanceTotalViewProps> = ({
     sales,
     tournaments,
     expenses,
+    purchases,
   );
 
   // Active metrics depending on view (selected month vs all-time)
@@ -59,12 +63,13 @@ export const BalanceTotalView: React.FC<BalanceTotalViewProps> = ({
   const activeTournamentCosts = isAllTime ? tourAll.costs : monthData.tournamentCosts;
   const activeTournamentNet = isAllTime ? tourAll.net : monthData.tournamentNet;
   const activeExpenses = isAllTime ? totalExpensesAll : monthData.expenses;
+  const activeReinvest = isAllTime ? totalReinvestAll : monthData.reinvestment;
 
   const activeRevenue = isAllTime
     ? rec.totalCollected + tourAll.revenue
     : monthData.totalRevenue;
   const activeCosts = isAllTime
-    ? tourAll.costs + totalExpensesAll
+    ? tourAll.costs + totalExpensesAll + totalReinvestAll
     : monthData.totalCosts;
   const activeNet = isAllTime ? activeRevenue - activeCosts : monthData.net;
   const activeLiquid = isAllTime
@@ -73,7 +78,7 @@ export const BalanceTotalView: React.FC<BalanceTotalViewProps> = ({
 
   // Monthly breakdown for all months in history
   const monthlyBreakdown = allMonths.map((m) =>
-    calculateMonthSummary(m, sales, tournaments, expenses),
+    calculateMonthSummary(m, sales, tournaments, expenses, purchases),
   );
 
   return (
@@ -296,6 +301,7 @@ export const BalanceTotalView: React.FC<BalanceTotalViewProps> = ({
                 <th style={{ textAlign: 'right' }}>Ventas Cobradas</th>
                 <th style={{ textAlign: 'right' }}>Torneos (P&amp;L)</th>
                 <th style={{ textAlign: 'right' }}>Gastos Insumos</th>
+                <th style={{ textAlign: 'right' }}>Reinversión</th>
                 <th style={{ textAlign: 'right' }}>Resultado Neto</th>
                 <th style={{ textAlign: 'center' }}>Estado</th>
                 <th style={{ textAlign: 'center' }}>Acción</th>
@@ -345,6 +351,9 @@ export const BalanceTotalView: React.FC<BalanceTotalViewProps> = ({
                     </td>
                     <td style={{ textAlign: 'right', color: '#a78bfa' }}>
                       -{formatGs(mb.expenses)}
+                    </td>
+                    <td style={{ textAlign: 'right', color: '#f87171' }}>
+                      -{formatGs(mb.reinvestment)}
                     </td>
                     <td
                       style={{
@@ -455,6 +464,17 @@ export const BalanceTotalView: React.FC<BalanceTotalViewProps> = ({
                   </td>
                   <td style={{ textAlign: 'right', fontWeight: 700, color: '#f87171' }}>
                     -{formatGs(activeExpenses)}
+                  </td>
+                </tr>
+                <tr>
+                  <td>Reinversión en Lotes / Stock</td>
+                  <td>
+                    <span className="badge" style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#f87171' }}>
+                      Egreso
+                    </span>
+                  </td>
+                  <td style={{ textAlign: 'right', fontWeight: 700, color: '#f87171' }}>
+                    -{formatGs(activeReinvest)}
                   </td>
                 </tr>
               </tbody>

@@ -1,6 +1,6 @@
 import React from 'react';
 
-export type TabType = 'intake' | 'receivables' | 'tournaments' | 'balance' | 'backup';
+export type TabType = 'intake' | 'receivables' | 'reinvest' | 'tournaments' | 'balance' | 'backup';
 
 interface HeaderProps {
   activeTab: TabType;
@@ -50,6 +50,12 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, colgado
               {colgadoCount}
             </span>
           )}
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'reinvest' ? 'active' : ''}`}
+          onClick={() => setActiveTab('reinvest')}
+        >
+          <span>🔄</span> Reinversión
         </button>
         <button
           className={`tab-btn ${activeTab === 'tournaments' ? 'active' : ''}`}

@@ -7,6 +7,7 @@ import {
   type Tournament,
   type ExpenseItem,
   type InventoryItem,
+  type Purchase,
 } from './domain/schemas';
 import { saleBalance, todayIso, newId } from './domain/ledger';
 import { Header, type TabType } from './components/Header';
@@ -15,6 +16,7 @@ import { ReceivablesView } from './components/ReceivablesView';
 import { TournamentsView } from './components/TournamentsView';
 import { BalanceTotalView } from './components/BalanceTotalView';
 import { BackupView } from './components/BackupView';
+import { ReinvestmentView } from './components/ReinvestmentView';
 
 export const App: React.FC = () => {
   const [state, setState] = useState<AppState>(() => {
@@ -105,6 +107,20 @@ export const App: React.FC = () => {
     }));
   };
 
+  const handleAddPurchase = (p: Purchase) => {
+    setState((prev) => ({
+      ...prev,
+      purchases: [p, ...(prev.purchases ?? [])],
+    }));
+  };
+
+  const handleDeletePurchase = (id: string) => {
+    setState((prev) => ({
+      ...prev,
+      purchases: (prev.purchases ?? []).filter((p) => p.id !== id),
+    }));
+  };
+
   const handleConvertInventoryToSale = (
     item: InventoryItem,
     buyer: string,
@@ -183,6 +199,16 @@ export const App: React.FC = () => {
           />
         )}
 
+        {activeTab === 'reinvest' && (
+          <ReinvestmentView
+            purchases={state.purchases ?? []}
+            inventory={state.inventory ?? []}
+            onAddPurchase={handleAddPurchase}
+            onDeletePurchase={handleDeletePurchase}
+            onAddInventory={handleAddInventory}
+          />
+        )}
+
         {activeTab === 'tournaments' && (
           <TournamentsView
             tournaments={state.tournaments}
@@ -200,6 +226,7 @@ export const App: React.FC = () => {
             tournaments={state.tournaments}
             expenses={state.expenses ?? []}
             inventory={state.inventory ?? []}
+            purchases={state.purchases ?? []}
             onNavigate={(tab) => setActiveTab(tab)}
           />
         )}

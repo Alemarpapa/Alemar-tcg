@@ -139,6 +139,16 @@ export const InventoryItemSchema = z.object({
   status: z.enum(['disponible', 'reservado', 'vendido']).default('disponible'),
   createdAt: IsoDateSchema,
   notes: z.string().max(300).optional(),
+  /** Lot purchase this item came from (see PurchaseSchema). */
+  purchaseId: z.string().optional(),
+});
+
+/** Money reinvested in a lot of cards/products to resell. Its items are stocked as InventoryItems with purchaseId. */
+export const PurchaseSchema = z.object({
+  id: z.string().min(1),
+  description: z.string().trim().min(1, 'Falta la descripción de la compra').max(120),
+  amount: PositiveAmountSchema,
+  date: IsoDateSchema,
 });
 
 export const AppStateSchema = z.object({
@@ -147,6 +157,7 @@ export const AppStateSchema = z.object({
   tournaments: z.array(TournamentSchema),
   expenses: z.array(ExpenseItemSchema).default([]),
   inventory: z.array(InventoryItemSchema).default([]),
+  purchases: z.array(PurchaseSchema).default([]),
 });
 
 export type Payment = z.infer<typeof PaymentSchema>;
@@ -156,6 +167,7 @@ export type PrizeItem = z.infer<typeof PrizeItemSchema>;
 export type Tournament = z.infer<typeof TournamentSchema>;
 export type ExpenseItem = z.infer<typeof ExpenseItemSchema>;
 export type InventoryItem = z.infer<typeof InventoryItemSchema>;
+export type Purchase = z.infer<typeof PurchaseSchema>;
 export type AppState = z.infer<typeof AppStateSchema>;
 
 export const emptyState = (): AppState => ({
@@ -164,6 +176,7 @@ export const emptyState = (): AppState => ({
   tournaments: [],
   expenses: [],
   inventory: [],
+  purchases: [],
 });
 
 /** Flattens Zod issues into human-readable Spanish messages. */

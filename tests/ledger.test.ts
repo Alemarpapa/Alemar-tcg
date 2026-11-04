@@ -7,6 +7,7 @@ import {
   saleBalance,
   saleStatus,
   summarizeInventory,
+  summarizePurchase,
   summarizeReceivables,
 } from '../src/domain/ledger';
 import type { Sale } from '../src/domain/schemas';
@@ -126,7 +127,7 @@ describe('storage & resilience', () => {
 
   it('saves and reloads state idempotently', () => {
     const st = fakeStorage();
-    const initial = { version: 1 as const, sales: [sale()], tournaments: [], expenses: [], inventory: [] };
+    const initial = { version: 1 as const, sales: [sale()], tournaments: [], expenses: [], inventory: [], purchases: [] };
     saveState(st, initial);
     const loaded = loadState(st);
     expect(loaded.state.sales).toHaveLength(1);
@@ -205,5 +206,23 @@ describe('monthly balances & inventory stock', () => {
     expect(summary.reservedCount).toBe(1);
     expect(summary.soldCount).toBe(1);
     expect(summary.count).toBe(3);
+  });
+});
+
+describe('reinversión en lotes', () => {
+  const lot = { id: 'lot1', description: 'Lote restock', amount: 180_000, date: '2026-11-04' };
+  const item = (id: string, price: number, status: 'disponible' | 'vendido') => ({
+    id, description: id, category: 'Carta Suelta', price, status, createdAt: '2026-11-04', purchaseId: 'lot1',
+  });
+
+  it('starts negative and recovers as lot cards are sold', () => {
+    const inv = [item('a', 100_000, 'vendido'), item('b', 120_000, 'disponible'), { ...item('x', 999, 'vendido'), purchaseId: undefined }];
+    const s = summarizePurchase(lot, inv);
+    expect(s).toEqual({ invested: 180_000, stockValue: 120_000, soldValue: 100_000, recovered: -80_000, itemCount: 2 });
+  });
+
+  it('counts the purchase as money out in its month only', () => {
+    expect(calculateMonthSummary('2026-11', [], [], [], [lot]).net).toBe(-180_000);
+    expect(calculateMonthSummary('2026-10', [], [], [], [lot]).reinvestment).toBe(0);
   });
 });

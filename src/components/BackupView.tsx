@@ -80,6 +80,7 @@ const SAMPLE_DATA: AppState = {
       notes: 'Color negro, 20 hojas incluidas',
     },
   ],
+  purchases: [],
 };
 
 export const BackupView: React.FC<BackupViewProps> = ({ state, onRestoreState }) => {
