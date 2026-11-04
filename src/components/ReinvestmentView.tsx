@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { newId, summarizePurchase, todayIso } from '../domain/ledger';
+import { newId, summarizeReinvestment, todayIso } from '../domain/ledger';
 import { formatGs } from '../domain/money';
 import type { InventoryItem, Purchase } from '../domain/schemas';
 
@@ -26,11 +26,8 @@ const selectStyle: React.CSSProperties = {
 const signed = (n: number) => (n >= 0 ? `+${formatGs(n)}` : formatGs(n));
 const toAmount = (raw: string) => parseInt(raw.replace(/\D/g, ''), 10);
 
-/** Form to stock one card/product, from a lot or from your own cards (no purchase). */
-const StockFromLotForm: React.FC<{ purchase?: Purchase; onAddInventory: (item: InventoryItem) => void }> = ({
-  purchase,
-  onAddInventory,
-}) => {
+/** Single restock form: every card goes to the same stock. */
+const RestockForm: React.FC<{ onAddInventory: (item: InventoryItem) => void }> = ({ onAddInventory }) => {
   const [desc, setDesc] = useState('');
   const [category, setCategory] = useState('Carta Suelta');
   const [price, setPrice] = useState('');
@@ -49,7 +46,6 @@ const StockFromLotForm: React.FC<{ purchase?: Purchase; onAddInventory: (item: I
       price: parsed,
       status: 'disponible',
       createdAt: todayIso(),
-      ...(purchase ? { purchaseId: purchase.id, notes: `Del lote: ${purchase.description}` } : {}),
     });
     setDesc('');
     setPrice('');
@@ -222,31 +218,22 @@ export const ReinvestmentView: React.FC<ReinvestmentViewProps> = ({
   onConvertInventoryToSale,
 }) => {
   const [selling, setSelling] = useState<InventoryItem | null>(null);
-  const actions: StockActions = { onSell: setSelling, onUpdateInventory, onDeleteInventory };
-  const lotIds = new Set(purchases.map((p) => p.id));
-  // Own cards (no lot) and cards whose lot was deleted live here.
-  const ownStock = inventory.filter((i) => !i.purchaseId || !lotIds.has(i.purchaseId));
-  const ownStockValue = ownStock.filter((i) => i.status !== 'vendido').reduce((acc, i) => acc + i.price, 0);
+  const [showSold, setShowSold] = useState(false);
   const [desc, setDesc] = useState('');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState<string>(todayIso());
   const [error, setError] = useState<string | null>(null);
 
-  const summaries = purchases.map((p) => ({ purchase: p, summary: summarizePurchase(p, inventory) }));
-  const totals = summaries.reduce(
-    (acc, { summary: s }) => ({
-      invested: acc.invested + s.invested,
-      stockValue: acc.stockValue + s.stockValue,
-      soldValue: acc.soldValue + s.soldValue,
-    }),
-    { invested: 0, stockValue: 0, soldValue: 0 },
-  );
-  const totalRecovered = totals.soldValue - totals.invested;
+  const s = summarizeReinvestment(purchases, inventory);
+  const pct = s.invested > 0 ? Math.min(100, Math.round((s.soldValue / s.invested) * 100)) : 0;
+  const soldCount = inventory.filter((i) => i.status === 'vendido').length;
+  const visibleStock = showSold ? inventory : inventory.filter((i) => i.status !== 'vendido');
+  const sortedPurchases = [...purchases].sort((a, b) => b.date.localeCompare(a.date));
 
   const handleAddPurchase = (e: React.FormEvent) => {
     e.preventDefault();
     const parsed = toAmount(amount);
-    if (!desc.trim()) return setError('Ingresa qué compraste (ej: Lote de 200 cartas).');
+    if (!desc.trim()) return setError('Ponle un nombre a lo que compraste (ej: Vex alter).');
     if (isNaN(parsed) || parsed <= 0) return setError('Ingresa el monto invertido mayor a 0.');
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return setError('Ingresa una fecha válida.');
     setError(null);
@@ -259,42 +246,42 @@ export const ReinvestmentView: React.FC<ReinvestmentViewProps> = ({
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       <div className="kpi-grid">
         <div className="kpi-card" style={{ borderColor: '#ef4444' }}>
-          <div className="kpi-label">Dinero Reinvertido</div>
-          <div className="kpi-value" style={{ color: '#f87171' }}>-{formatGs(totals.invested)}</div>
-          <div className="kpi-subtitle">{purchases.length} lote(s) comprados</div>
+          <div className="kpi-label">Total Reinvertido</div>
+          <div className="kpi-value" style={{ color: '#f87171' }}>-{formatGs(s.invested)}</div>
+          <div className="kpi-subtitle">{purchases.length} compra(s)</div>
         </div>
         <div className="kpi-card colgado">
           <div className="kpi-label">Stock por Vender</div>
-          <div className="kpi-value" style={{ color: '#f59e0b' }}>{formatGs(totals.stockValue + ownStockValue)}</div>
-          <div className="kpi-subtitle">Lotes: {formatGs(totals.stockValue)} · Propio: {formatGs(ownStockValue)}</div>
+          <div className="kpi-value" style={{ color: '#f59e0b' }}>{formatGs(s.stockValue)}</div>
+          <div className="kpi-subtitle">{inventory.length - soldCount} artículo(s) en stock</div>
         </div>
         <div className="kpi-card" style={{ borderColor: '#10b981' }}>
-          <div className="kpi-label">Vendido de Lotes</div>
-          <div className="kpi-value" style={{ color: '#10b981' }}>{formatGs(totals.soldValue)}</div>
-          <div className="kpi-subtitle">Cartas de lotes ya vendidas</div>
+          <div className="kpi-label">Vendido</div>
+          <div className="kpi-value" style={{ color: '#10b981' }}>{formatGs(s.soldValue)}</div>
+          <div className="kpi-subtitle">{soldCount} artículo(s) vendidos</div>
         </div>
         <div className="kpi-card">
-          <div className="kpi-label">Recuperación Neta</div>
-          <div className="kpi-value" style={{ color: totalRecovered >= 0 ? '#10b981' : '#ef4444' }}>
-            {signed(totalRecovered)}
+          <div className="kpi-label">{s.recovered >= 0 ? '✓ Ganancia' : 'Falta Recuperar'}</div>
+          <div className="kpi-value" style={{ color: s.recovered >= 0 ? '#10b981' : '#ef4444' }}>{signed(s.recovered)}</div>
+          <div style={{ marginTop: '0.5rem', height: '6px', background: '#1e293b', borderRadius: '3px', overflow: 'hidden' }}>
+            <div style={{ width: `${pct}%`, height: '100%', background: '#10b981' }} />
           </div>
-          <div className="kpi-subtitle">Vendido − reinvertido</div>
+          <div className="kpi-subtitle">{pct}% recuperado</div>
         </div>
       </div>
 
       <div className="card">
         <div className="card-title">
-          <span>🔄 Registrar Reinversión (Compra de Lote / Cartas)</span>
+          <span>💰 Cargar Reinversión</span>
         </div>
         <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: '-0.5rem', marginBottom: '1rem' }}>
-          Registra la plata que pones en mercadería para revender. Sale como dinero negativo del mes y se va recuperando a
-          medida que stockeas y vendes sus cartas.
+          Cada compra se suma al total reinvertido. Ponele un nombre para acordarte qué fue.
         </p>
         <form onSubmit={handleAddPurchase}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem', alignItems: 'end' }}>
             <div style={{ gridColumn: 'span 2' }}>
-              <label style={labelStyle}>¿Qué compraste? *</label>
-              <input type="text" placeholder="Ej: Lote de cartas para restock" value={desc} onChange={(e) => setDesc(e.target.value)} />
+              <label style={labelStyle}>Nombre *</label>
+              <input type="text" placeholder="Ej: Vex alter / Lote de cartas" value={desc} onChange={(e) => setDesc(e.target.value)} />
             </div>
             <div>
               <label style={labelStyle}>Monto invertido (Gs) *</label>
@@ -305,70 +292,73 @@ export const ReinvestmentView: React.FC<ReinvestmentViewProps> = ({
               <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             </div>
             <button type="submit" className="btn btn-primary" style={{ padding: '0.6rem 1rem' }}>
-              💾 Registrar Compra
+              ➕ Sumar
             </button>
           </div>
           {error && <div style={{ color: '#f87171', fontSize: '0.8rem', marginTop: '0.5rem' }}>⚠️ {error}</div>}
         </form>
-      </div>
 
-      {summaries.length === 0 && (
-        <div className="card" style={{ color: '#94a3b8', textAlign: 'center' }}>
-          Todavía no registraste compras. Cuando compres un lote, cargalo arriba y después stockea sus cartas.
-        </div>
-      )}
-
-      {summaries.map(({ purchase, summary }) => {
-        const items = inventory.filter((i) => i.purchaseId === purchase.id);
-        const pct = Math.min(100, Math.round((summary.soldValue / summary.invested) * 100));
-        return (
-          <div className="card" key={purchase.id}>
-            <div className="card-title" style={{ justifyContent: 'space-between' }}>
-              <span>📦 {purchase.description}</span>
-              <button
-                className="btn btn-outline"
-                style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', color: '#ef4444' }}
-                title="Eliminar compra"
-                onClick={() => {
-                  if (window.confirm(`¿Eliminar la compra "${purchase.description}"? Sus cartas pasan a Stock Propio.`)) {
-                    onDeletePurchase(purchase.id);
-                  }
-                }}
-              >
-                🗑️
-              </button>
-            </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem', fontSize: '0.9rem' }}>
-              <span>📅 {purchase.date}</span>
-              <span style={{ color: '#f87171', fontWeight: 700 }}>Invertido: -{formatGs(summary.invested)}</span>
-              <span style={{ color: '#f59e0b' }}>En stock: {formatGs(summary.stockValue)}</span>
-              <span style={{ color: '#10b981' }}>Vendido: {formatGs(summary.soldValue)}</span>
-              <span style={{ fontWeight: 800, color: summary.recovered >= 0 ? '#10b981' : '#ef4444' }}>
-                {summary.recovered >= 0 ? '✓ Ganancia' : 'Falta recuperar'}: {signed(summary.recovered)}
-              </span>
-            </div>
-            <div style={{ marginTop: '0.75rem', height: '8px', background: '#1e293b', borderRadius: '4px', overflow: 'hidden' }}>
-              <div style={{ width: `${pct}%`, height: '100%', background: '#10b981' }} />
-            </div>
-            <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.25rem' }}>{pct}% recuperado</div>
-
-            {items.length > 0 && <StockTable items={items} {...actions} />}
-
-            <StockFromLotForm purchase={purchase} onAddInventory={onAddInventory} />
+        {sortedPurchases.length > 0 && (
+          <div className="table-wrapper" style={{ marginTop: '1rem' }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>Compra</th>
+                  <th>Fecha</th>
+                  <th style={{ textAlign: 'right' }}>Monto</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedPurchases.map((p) => (
+                  <tr key={p.id}>
+                    <td>{p.description}</td>
+                    <td style={{ color: '#94a3b8' }}>{p.date}</td>
+                    <td style={{ textAlign: 'right', color: '#f87171' }}>-{formatGs(p.amount)}</td>
+                    <td style={{ textAlign: 'right' }}>
+                      <button
+                        className="btn btn-outline"
+                        style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', color: '#ef4444' }}
+                        title="Eliminar compra"
+                        onClick={() => {
+                          if (window.confirm(`¿Eliminar la compra "${p.description}"? El stock cargado se mantiene.`)) onDeletePurchase(p.id);
+                        }}
+                      >
+                        🗑️
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td style={{ fontWeight: 800 }}>TOTAL</td>
+                  <td></td>
+                  <td style={{ textAlign: 'right', fontWeight: 800, color: '#f87171' }}>-{formatGs(s.invested)}</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
           </div>
-        );
-      })}
+        )}
+      </div>
 
       <div className="card">
         <div className="card-title">
-          <span>🃏 Stock Propio (sin lote)</span>
-          <span style={{ color: '#f59e0b', fontSize: '0.9rem' }}>{formatGs(ownStockValue)} por vender</span>
+          <span>📦 Cargar Restock</span>
+          <button className="btn btn-outline" style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }} onClick={() => setShowSold((v) => !v)}>
+            {showSold ? 'Ocultar vendidos' : `Ver vendidos (${soldCount})`}
+          </button>
         </div>
         <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: '-0.5rem' }}>
-          Cartas, carpetas o productos que ya tenías y no salieron de una compra registrada.
+          Todas las cartas y productos que tenés para vender, en una sola lista.
         </p>
-        {ownStock.length > 0 && <StockTable items={ownStock} {...actions} />}
-        <StockFromLotForm onAddInventory={onAddInventory} />
+        <RestockForm onAddInventory={onAddInventory} />
+        {visibleStock.length > 0 ? (
+          <StockTable items={visibleStock} onSell={setSelling} onUpdateInventory={onUpdateInventory} onDeleteInventory={onDeleteInventory} />
+        ) : (
+          <div style={{ color: '#64748b', textAlign: 'center', padding: '1.5rem' }}>No hay stock cargado todavía.</div>
+        )}
       </div>
 
       {selling && <SellModal item={selling} onClose={() => setSelling(null)} onConfirm={onConvertInventoryToSale} />}

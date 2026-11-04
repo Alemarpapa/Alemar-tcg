@@ -276,27 +276,26 @@ export function summarizeInventory(items: InventoryItem[] = []): InventorySummar
   };
 }
 
-export interface PurchaseSummary {
+export interface ReinvestmentSummary {
   invested: number;
-  /** Expected sale value of this lot's cards still in stock. */
+  /** Expected sale value of stock not yet sold. */
   stockValue: number;
-  /** Sale value of this lot's cards already sold. */
+  /** Sale value of stock already sold. */
   soldValue: number;
-  /** soldValue - invested: negative until the lot pays for itself. */
+  /** soldValue - invested: negative until the reinvested money comes back. */
   recovered: number;
-  itemCount: number;
 }
 
-export function summarizePurchase(purchase: Purchase, inventory: InventoryItem[] = []): PurchaseSummary {
-  const items = inventory.filter((i) => i.purchaseId === purchase.id);
+/** One single pool: every purchase adds to the investment, every stocked card counts against it. */
+export function summarizeReinvestment(purchases: Purchase[] = [], inventory: InventoryItem[] = []): ReinvestmentSummary {
   const sum = (list: InventoryItem[]) => list.reduce((acc, i) => acc + i.price, 0);
-  const soldValue = sum(items.filter((i) => i.status === 'vendido'));
+  const invested = purchases.reduce((acc, p) => acc + p.amount, 0);
+  const soldValue = sum(inventory.filter((i) => i.status === 'vendido'));
   return {
-    invested: purchase.amount,
-    stockValue: sum(items.filter((i) => i.status !== 'vendido')),
+    invested,
+    stockValue: sum(inventory.filter((i) => i.status !== 'vendido')),
     soldValue,
-    recovered: soldValue - purchase.amount,
-    itemCount: items.length,
+    recovered: soldValue - invested,
   };
 }
 

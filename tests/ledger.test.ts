@@ -7,7 +7,7 @@ import {
   saleBalance,
   saleStatus,
   summarizeInventory,
-  summarizePurchase,
+  summarizeReinvestment,
   summarizeReceivables,
 } from '../src/domain/ledger';
 import type { Sale } from '../src/domain/schemas';
@@ -215,10 +215,12 @@ describe('reinversión en lotes', () => {
     id, description: id, category: 'Carta Suelta', price, status, createdAt: '2026-11-04', purchaseId: 'lot1',
   });
 
-  it('starts negative and recovers as lot cards are sold', () => {
-    const inv = [item('a', 100_000, 'vendido'), item('b', 120_000, 'disponible'), { ...item('x', 999, 'vendido'), purchaseId: undefined }];
-    const s = summarizePurchase(lot, inv);
-    expect(s).toEqual({ invested: 180_000, stockValue: 120_000, soldValue: 100_000, recovered: -80_000, itemCount: 2 });
+  it('sums every purchase into one pool and recovers as any stock is sold', () => {
+    const second = { ...lot, id: 'lot2', amount: 125_000 };
+    const inv = [item('a', 100_000, 'vendido'), item('b', 120_000, 'disponible'), { ...item('x', 50_000, 'vendido'), purchaseId: undefined }];
+    expect(summarizeReinvestment([lot, second], inv)).toEqual({
+      invested: 305_000, stockValue: 120_000, soldValue: 150_000, recovered: -155_000,
+    });
   });
 
   it('counts the purchase as money out in its month only', () => {

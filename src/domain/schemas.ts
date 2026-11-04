@@ -143,7 +143,7 @@ export const InventoryItemSchema = z.object({
   purchaseId: z.string().optional(),
 });
 
-/** Money reinvested in a lot of cards/products to resell. Its items are stocked as InventoryItems with purchaseId. */
+/** Money reinvested in cards/products to resell. All purchases form one pool with the whole stock. */
 export const PurchaseSchema = z.object({
   id: z.string().min(1),
   description: z.string().trim().min(1, 'Falta la descripción de la compra').max(120),
