@@ -226,3 +226,17 @@ describe('reinversión en lotes', () => {
     expect(calculateMonthSummary('2026-10', [], [], [], [lot]).reinvestment).toBe(0);
   });
 });
+
+describe('balance total = 3 pestañas', () => {
+  it('cobrado − reinversión + (torneos − gastos) equals the month net', () => {
+    const sales = [{ id: 's', buyer: 'L', item: 'x', total: 200_000, createdAt: '2026-11-01', payments: [{ id: 'p', amount: 150_000, date: '2026-11-02' }] }];
+    const tournaments: Tournament[] = [
+      { id: 't', name: 'Liga', date: '2026-11-03', entryFee: 30_000, cashPrize: 50_000, productPrizes: [{ description: 'Sobres', quantity: 1, unitValue: 20_000 }] },
+    ];
+    const expenses = [{ id: 'e', description: 'fundas', category: 'Fundas', amount: 25_000, date: '2026-11-04' }];
+    const purchases = [{ id: 'l', description: 'lote', amount: 180_000, date: '2026-11-04' }];
+    const m = calculateMonthSummary('2026-11', sales, tournaments, expenses, purchases);
+    expect(m.salesCollected - m.reinvestment + (m.tournamentNet - m.expenses)).toBe(m.net);
+    expect(m.net).toBe(150_000 - 180_000 + (70_000 - 30_000 - 25_000));
+  });
+});

@@ -131,15 +131,16 @@ export const TournamentsView: React.FC<TournamentsViewProps> = ({
       {/* KPI Cards */}
       <div className="kpi-grid">
         <div className="kpi-card torneos">
-          <div className="kpi-label">Balance Neto Torneos (P&amp;L)</div>
+          <div className="kpi-label">Balance Torneos + Gastos</div>
           <div
             className="kpi-value"
-            style={{ color: summary.net >= 0 ? '#10b981' : '#ef4444' }}
+            style={{ color: summary.net - totalExpenses >= 0 ? '#10b981' : '#ef4444' }}
           >
-            {summary.net >= 0 ? `+${formatGs(summary.net)}` : formatGs(summary.net)}
+            {summary.net - totalExpenses >= 0 ? `+${formatGs(summary.net - totalExpenses)}` : formatGs(summary.net - totalExpenses)}
           </div>
           <div className="kpi-subtitle">
-            ROI Global: <strong style={{ color: '#fff' }}>{formatRoi(summary.roi)}</strong>
+            Torneos: {formatGs(summary.net)} · Otros gastos: -{formatGs(totalExpenses)} · ROI{' '}
+            <strong style={{ color: '#fff' }}>{formatRoi(summary.roi)}</strong>
           </div>
         </div>
 

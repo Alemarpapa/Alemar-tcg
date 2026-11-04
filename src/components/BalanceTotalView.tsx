@@ -16,7 +16,7 @@ interface BalanceTotalViewProps {
   expenses: ExpenseItem[];
   inventory?: InventoryItem[];
   purchases?: Purchase[];
-  onNavigate: (tab: 'intake' | 'receivables' | 'tournaments') => void;
+  onNavigate: (tab: 'receivables' | 'reinvest' | 'tournaments') => void;
 }
 
 export const BalanceTotalView: React.FC<BalanceTotalViewProps> = ({
@@ -72,6 +72,8 @@ export const BalanceTotalView: React.FC<BalanceTotalViewProps> = ({
     ? tourAll.costs + totalExpensesAll + totalReinvestAll
     : monthData.totalCosts;
   const activeNet = isAllTime ? activeRevenue - activeCosts : monthData.net;
+  // The three pillars (one per tab) add up exactly to activeNet.
+  const activeTorneos = activeTournamentNet - activeExpenses;
   const activeLiquid = isAllTime
     ? (rec.totalCollected + tourAll.cashRevenue) - activeCosts
     : monthData.liquidNet;
@@ -223,63 +225,45 @@ export const BalanceTotalView: React.FC<BalanceTotalViewProps> = ({
             }}
           >
             <div style={{ fontSize: '0.75rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 600 }}>
-              Plata Colgada Total en Espera
+              Plata en Espera (no cuenta en el neto)
             </div>
             <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#f59e0b', marginTop: '0.2rem' }}>
               {formatGs(totalMoneyOnHold)}
             </div>
             <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.3rem', lineHeight: 1.4 }}>
-              💳 {formatGs(rec.outstanding)} en deudas de clientes
+              💸 {formatGs(rec.outstanding)} por cobrar (Dinero Colgado)
               <br />
-              📦 {formatGs(inv.totalValue)} en stock por vender ({inv.availableCount} ítems)
+              🔄 {formatGs(inv.totalValue)} en stock por vender (Reinversión)
             </div>
           </div>
         </div>
       </div>
 
-      {/* 4 Core Financial Pillar KPIs for the Period */}
+      {/* 3 pillars, one per tab: Dinero Colgado + Reinversión + Torneos = Balance Neto */}
       <div className="kpi-grid">
-        {/* Pillar 1: Sales Collected */}
-        <div className="kpi-card cobrado">
-          <div className="kpi-label">Ventas Cobradas ({isAllTime ? 'Histórico' : 'En el Mes'})</div>
+        <div className="kpi-card cobrado" style={{ cursor: 'pointer' }} onClick={() => onNavigate('receivables')}>
+          <div className="kpi-label">💸 Dinero Colgado · Cobrado ({isAllTime ? 'Histórico' : 'En el Mes'})</div>
           <div className="kpi-value" style={{ color: '#10b981' }}>
-            {formatGs(activeCollected)}
+            +{formatGs(activeCollected)}
           </div>
-          <div className="kpi-subtitle">
-            Ingreso de efectivo real por ventas
-          </div>
+          <div className="kpi-subtitle">Falta cobrar: {formatGs(rec.outstanding)}</div>
         </div>
 
-        {/* Pillar 2: Tournament P&L */}
-        <div className="kpi-card torneos">
-          <div className="kpi-label">Torneos P&amp;L ({isAllTime ? 'Histórico' : 'En el Mes'})</div>
-          <div className="kpi-value" style={{ color: activeTournamentNet >= 0 ? '#10b981' : '#ef4444' }}>
-            {activeTournamentNet >= 0 ? `+${formatGs(activeTournamentNet)}` : formatGs(activeTournamentNet)}
+        <div className="kpi-card" style={{ borderColor: '#ef4444', cursor: 'pointer' }} onClick={() => onNavigate('reinvest')}>
+          <div className="kpi-label">🔄 Reinversión ({isAllTime ? 'Histórico' : 'En el Mes'})</div>
+          <div className="kpi-value" style={{ color: activeReinvest > 0 ? '#ef4444' : '#10b981' }}>
+            -{formatGs(activeReinvest)}
           </div>
-          <div className="kpi-subtitle">
-            Premios: {formatGs(activeTournamentCash + activeTournamentProduct)} | Entradas: {formatGs(activeTournamentCosts)}
-          </div>
+          <div className="kpi-subtitle">Stock por vender: {formatGs(inv.totalValue)}</div>
         </div>
 
-        {/* Pillar 3: Accessories & Costs */}
-        <div className="kpi-card" style={{ borderColor: '#8b5cf6' }}>
-          <div className="kpi-label">Gastos / Insumos ({isAllTime ? 'Histórico' : 'En el Mes'})</div>
-          <div className="kpi-value" style={{ color: '#a78bfa' }}>
-            {formatGs(activeExpenses)}
+        <div className="kpi-card torneos" style={{ cursor: 'pointer' }} onClick={() => onNavigate('tournaments')}>
+          <div className="kpi-label">🏆 Torneos + Gastos ({isAllTime ? 'Histórico' : 'En el Mes'})</div>
+          <div className="kpi-value" style={{ color: activeTorneos >= 0 ? '#10b981' : '#ef4444' }}>
+            {activeTorneos >= 0 ? `+${formatGs(activeTorneos)}` : formatGs(activeTorneos)}
           </div>
           <div className="kpi-subtitle">
-            Fundas, playmats, carpetas y accesorios
-          </div>
-        </div>
-
-        {/* Pillar 4: Money on Hold (Receivables + Stock) */}
-        <div className="kpi-card colgado">
-          <div className="kpi-label">Plata Colgada (Global)</div>
-          <div className="kpi-value" style={{ color: totalMoneyOnHold > 0 ? '#f59e0b' : '#10b981' }}>
-            {formatGs(totalMoneyOnHold)}
-          </div>
-          <div className="kpi-subtitle">
-            {rec.outstanding > 0 ? `${formatGs(rec.outstanding)} cobrar` : '0 deuda'} + {formatGs(inv.totalValue)} stock
+            Torneos: {formatGs(activeTournamentNet)} · Otros gastos: -{formatGs(activeExpenses)}
           </div>
         </div>
       </div>
@@ -290,7 +274,7 @@ export const BalanceTotalView: React.FC<BalanceTotalViewProps> = ({
           <span>📅 Historial &amp; Desglose Mes a Mes (Ganancias y Pérdidas)</span>
         </div>
         <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: '-0.5rem', marginBottom: '1rem' }}>
-          Revisa cuánto ganaste o perdiste en cada mes individualmente, separando ventas cobradas, torneos y gastos.
+          Cada mes = lo cobrado (Dinero Colgado) − lo reinvertido (Reinversión) ± Torneos y sus gastos.
         </p>
 
         <div className="table-wrapper">
@@ -298,10 +282,9 @@ export const BalanceTotalView: React.FC<BalanceTotalViewProps> = ({
             <thead>
               <tr>
                 <th>Mes</th>
-                <th style={{ textAlign: 'right' }}>Ventas Cobradas</th>
-                <th style={{ textAlign: 'right' }}>Torneos (P&amp;L)</th>
-                <th style={{ textAlign: 'right' }}>Gastos Insumos</th>
-                <th style={{ textAlign: 'right' }}>Reinversión</th>
+                <th style={{ textAlign: 'right' }}>💸 Cobrado</th>
+                <th style={{ textAlign: 'right' }}>🔄 Reinversión</th>
+                <th style={{ textAlign: 'right' }}>🏆 Torneos + Gastos</th>
                 <th style={{ textAlign: 'right' }}>Resultado Neto</th>
                 <th style={{ textAlign: 'center' }}>Estado</th>
                 <th style={{ textAlign: 'center' }}>Acción</th>
@@ -340,20 +323,19 @@ export const BalanceTotalView: React.FC<BalanceTotalViewProps> = ({
                     <td style={{ textAlign: 'right', color: '#10b981', fontWeight: 600 }}>
                       +{formatGs(mb.salesCollected)}
                     </td>
+                    <td style={{ textAlign: 'right', color: '#f87171' }}>
+                      -{formatGs(mb.reinvestment)}
+                    </td>
                     <td
                       style={{
                         textAlign: 'right',
                         fontWeight: 600,
-                        color: mb.tournamentNet >= 0 ? '#10b981' : '#f87171',
+                        color: mb.tournamentNet - mb.expenses >= 0 ? '#10b981' : '#f87171',
                       }}
                     >
-                      {mb.tournamentNet >= 0 ? `+${formatGs(mb.tournamentNet)}` : formatGs(mb.tournamentNet)}
-                    </td>
-                    <td style={{ textAlign: 'right', color: '#a78bfa' }}>
-                      -{formatGs(mb.expenses)}
-                    </td>
-                    <td style={{ textAlign: 'right', color: '#f87171' }}>
-                      -{formatGs(mb.reinvestment)}
+                      {mb.tournamentNet - mb.expenses >= 0
+                        ? `+${formatGs(mb.tournamentNet - mb.expenses)}`
+                        : formatGs(mb.tournamentNet - mb.expenses)}
                     </td>
                     <td
                       style={{
@@ -415,7 +397,7 @@ export const BalanceTotalView: React.FC<BalanceTotalViewProps> = ({
                   <td>Ventas Efectivamente Cobradas</td>
                   <td>
                     <span className="badge" style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10b981' }}>
-                      Ingreso
+                      💸 Dinero Colgado
                     </span>
                   </td>
                   <td style={{ textAlign: 'right', fontWeight: 700, color: '#10b981' }}>
@@ -426,7 +408,7 @@ export const BalanceTotalView: React.FC<BalanceTotalViewProps> = ({
                   <td>Premios Torneos (Efectivo)</td>
                   <td>
                     <span className="badge" style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10b981' }}>
-                      Ingreso
+                      🏆 Torneos
                     </span>
                   </td>
                   <td style={{ textAlign: 'right', fontWeight: 700, color: '#10b981' }}>
@@ -437,7 +419,7 @@ export const BalanceTotalView: React.FC<BalanceTotalViewProps> = ({
                   <td>Premios Torneos (Sobres / Cartas)</td>
                   <td>
                     <span className="badge" style={{ background: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8' }}>
-                      Activo
+                      🏆 Torneos
                     </span>
                   </td>
                   <td style={{ textAlign: 'right', fontWeight: 700, color: '#38bdf8' }}>
@@ -448,7 +430,7 @@ export const BalanceTotalView: React.FC<BalanceTotalViewProps> = ({
                   <td>Inscripciones a Torneos</td>
                   <td>
                     <span className="badge" style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#f87171' }}>
-                      Egreso
+                      🏆 Torneos
                     </span>
                   </td>
                   <td style={{ textAlign: 'right', fontWeight: 700, color: '#f87171' }}>
@@ -456,10 +438,10 @@ export const BalanceTotalView: React.FC<BalanceTotalViewProps> = ({
                   </td>
                 </tr>
                 <tr>
-                  <td>Gastos en Accesorios &amp; Insumos</td>
+                  <td>Otros Gastos (fundas, accesorios…)</td>
                   <td>
                     <span className="badge" style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#f87171' }}>
-                      Egreso
+                      🏆 Torneos
                     </span>
                   </td>
                   <td style={{ textAlign: 'right', fontWeight: 700, color: '#f87171' }}>
@@ -470,7 +452,7 @@ export const BalanceTotalView: React.FC<BalanceTotalViewProps> = ({
                   <td>Reinversión en Lotes / Stock</td>
                   <td>
                     <span className="badge" style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#f87171' }}>
-                      Egreso
+                      🔄 Reinversión
                     </span>
                   </td>
                   <td style={{ textAlign: 'right', fontWeight: 700, color: '#f87171' }}>
@@ -515,7 +497,7 @@ export const BalanceTotalView: React.FC<BalanceTotalViewProps> = ({
                 }}
               >
                 <div style={{ fontWeight: 700, color: '#f59e0b', fontSize: '0.85rem' }}>
-                  📦 Stock por Vender (Plata Parada)
+                  🔄 Stock por Vender (Reinversión)
                 </div>
                 <div style={{ fontSize: '0.8rem', color: '#cbd5e1', marginTop: '0.2rem' }}>
                   Tienes <strong>{inv.availableCount}</strong> artículos/carpetas valorados en{' '}
@@ -547,7 +529,7 @@ export const BalanceTotalView: React.FC<BalanceTotalViewProps> = ({
               style={{ flex: 1, minWidth: '130px', fontSize: '0.8rem' }}
               onClick={() => onNavigate('receivables')}
             >
-              💸 Cobranzas &amp; Stock
+              💸 Dinero Colgado
             </button>
             <button
               className="btn btn-outline"
@@ -557,11 +539,11 @@ export const BalanceTotalView: React.FC<BalanceTotalViewProps> = ({
               🏆 Ver Torneos
             </button>
             <button
-              className="btn btn-primary"
+              className="btn btn-outline"
               style={{ flex: 1, minWidth: '130px', fontSize: '0.8rem' }}
-              onClick={() => onNavigate('intake')}
+              onClick={() => onNavigate('reinvest')}
             >
-              ✨ Nueva Venta
+              🔄 Reinversión
             </button>
           </div>
         </div>

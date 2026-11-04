@@ -166,9 +166,7 @@ export const App: React.FC = () => {
     setState(newState);
   };
 
-  const debtCount = state.sales.filter((s) => saleBalance(s) > 0).length;
-  const stockCount = (state.inventory ?? []).filter((i) => i.status !== 'vendido').length;
-  const colgadoCount = debtCount + stockCount;
+  const colgadoCount = state.sales.filter((s) => saleBalance(s) > 0).length;
 
   return (
     <div className="app-container">
@@ -189,13 +187,8 @@ export const App: React.FC = () => {
         {activeTab === 'receivables' && (
           <ReceivablesView
             sales={state.sales}
-            inventory={state.inventory ?? []}
             onUpdateSale={handleUpdateSale}
             onDeleteSale={handleDeleteSale}
-            onAddInventory={handleAddInventory}
-            onUpdateInventory={handleUpdateInventory}
-            onDeleteInventory={handleDeleteInventory}
-            onConvertInventoryToSale={handleConvertInventoryToSale}
           />
         )}
 
@@ -206,6 +199,9 @@ export const App: React.FC = () => {
             onAddPurchase={handleAddPurchase}
             onDeletePurchase={handleDeletePurchase}
             onAddInventory={handleAddInventory}
+            onUpdateInventory={handleUpdateInventory}
+            onDeleteInventory={handleDeleteInventory}
+            onConvertInventoryToSale={handleConvertInventoryToSale}
           />
         )}
 
