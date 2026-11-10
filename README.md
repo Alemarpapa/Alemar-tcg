@@ -1,5 +1,7 @@
 # ⚡ TCG Pro Ledger & Vault (PY)
 
+[![CI](https://github.com/Alemarpapa/Alemar-tcg/actions/workflows/ci.yml/badge.svg)](https://github.com/Alemarpapa/Alemar-tcg/actions/workflows/ci.yml)
+
 Sistema integral de finanzas personales, gestión de cobranzas (**dinero colgado**) y análisis de rentabilidad (**P&L y ROI**) para jugadores competitivos y vendedores de cartas coleccionables (TCG como Pokémon, Magic o Yu-Gi-Oh!).
 
 Construido con **React 19**, **TypeScript**, **Vite** y esquemas determinísticos validados con **Zod** y **Vitest**.
