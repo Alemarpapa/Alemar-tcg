@@ -19,11 +19,12 @@ Construido con **React 19**, **TypeScript**, **Vite** y esquemas determinístico
    - Panel de cuentas por cobrar con clasificación automática: **Vencido (Mora)**, **Por Vencer (≤ 3 días)** y **Al Día**.
    - Generador en 1 clic de recordatorios directos para **WhatsApp** (`wa.me`) con mensaje personalizado y educado.
    - Registro de cobros parciales con validación de montos (nunca permite cobrar más del saldo adeudado).
+   - Es un **recordatorio de cobros**: no entra en el Balance Total, porque esa plata ya cuenta como venta en Reinversión.
 
 3. **Módulo de Torneos & P&L Competitivo:**
    - Registra inscripciones, viáticos y transporte.
    - Monetiza premios en efectivo y premios en producto (sobres y cartas selladas calculadas a valor de reventa).
-   - Calcula métricas clave: **Balance Neto del Mes**, **ROI por Torneo (%)** y **Tasa de Rentabilidad**.
+   - Calcula métricas clave: **Balance Neto del Mes** (Torneos + Reinversión), **ROI por Torneo (%)** y **Tasa de Rentabilidad**.
 
 4. **Portabilidad y Privacidad:**
    - Funciona 100% offline con persistencia en `LocalStorage`.
@@ -43,7 +44,7 @@ npm install
 # Iniciar servidor de desarrollo local
 npm run dev
 
-# Ejecutar suite de pruebas Vitest (39 tests unitarios y guardrails)
+# Ejecutar suite de pruebas Vitest (48 tests unitarios y guardrails)
 npm test
 
 # Compilar para producción
@@ -57,7 +58,7 @@ npm run build
 La suite de tests (`tests/`) cubre:
 - **`money-dates.test.ts`:** Formato en Guaraníes (`Gs. 1.200.000` / `₲ 1.200.000`), detección de sufijos (`mil`, `k`, `millones`) y resolución determinística de fechas relativas ("el viernes", "en 2 semanas", "15/11").
 - **`parser.test.ts`:** Ingesta en lenguaje natural, extracción de compradores y cartas, detección de números de contacto paraguayos (`+595` / `0981...`) y guardrails ante inconsistencias matemáticas.
-- **`ledger.test.ts`:** Cálculos de cuentas por cobrar, estados de mora, amortización de pagos y resumen financiero.
+- **`ledger.test.ts`:** Cuentas por cobrar, estados de mora, amortización de pagos, Reinversión y Balance Total (el Dinero Colgado nunca suma al balance, para no contar dos veces la misma plata).
 
 ---
 

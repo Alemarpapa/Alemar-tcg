@@ -138,6 +138,8 @@ export const InventoryItemSchema = z.object({
   cost: AmountSchema.optional(),
   status: z.enum(['disponible', 'reservado', 'vendido']).default('disponible'),
   createdAt: IsoDateSchema,
+  /** Day it was sold; drives the month it counts in Reinversión. */
+  soldAt: IsoDateSchema.optional(),
   notes: z.string().max(300).optional(),
   /** Lot purchase this item came from (see PurchaseSchema). */
   purchaseId: z.string().optional(),

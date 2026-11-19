@@ -157,7 +157,7 @@ export const App: React.FC = () => {
       ...prev,
       sales: [newSale, ...prev.sales],
       inventory: (prev.inventory ?? []).map((i) =>
-        i.id === item.id ? { ...i, status: 'vendido' } : i,
+        i.id === item.id ? { ...i, status: 'vendido', soldAt: today } : i,
       ),
     }));
   };

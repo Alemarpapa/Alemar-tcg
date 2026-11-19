@@ -151,34 +151,36 @@ export function collectedThisMonth(sales: Sale[], today: IsoDate): number {
 export interface MonthSummary {
   month: string; // YYYY-MM
   monthLabel: string; // e.g. "Noviembre 2026"
-  salesCollected: number;
-  salesBilled: number;
   tournamentCash: number;
   tournamentProduct: number;
   tournamentCosts: number;
   tournamentNet: number;
   expenses: number;
+  /** Money spent on lots/cards to resell in the month. */
   reinvestment: number;
+  /** Sale value of stock sold in the month (Reinversión recovering its money). */
+  reinvestSold: number;
   totalRevenue: number;
   totalCosts: number;
   net: number;
   liquidNet: number;
 }
 
+/** Day a stock item was sold; items sold before `soldAt` existed fall back to their stocking date. */
+export const inventorySoldDate = (i: InventoryItem): IsoDate => i.soldAt ?? i.createdAt;
+
+/**
+ * Balance = Torneos + Reinversión. Dinero Colgado (sales on credit) is only a
+ * collection reminder: its money is the same stock sale counted in Reinversión,
+ * so it never enters the balance (otherwise it would be counted twice).
+ */
 export function calculateMonthSummary(
   month: string,
-  sales: Sale[],
   tournaments: Tournament[],
   expenses: ExpenseItem[],
   purchases: Purchase[] = [],
+  inventory: InventoryItem[] = [],
 ): MonthSummary {
-  const salesCollected = sales.reduce(
-    (acc, s) => acc + s.payments.filter((p) => p.date.startsWith(month)).reduce((a, p) => a + p.amount, 0),
-    0,
-  );
-
-  const salesBilled = sales.filter((s) => s.createdAt.startsWith(month)).reduce((acc, s) => acc + s.total, 0);
-
   const tournamentsInMonth = tournaments.filter((t) => t.date.startsWith(month));
   let tournamentCash = 0;
   let tournamentProduct = 0;
@@ -194,25 +196,27 @@ export function calculateMonthSummary(
   const expensesInMonth = expenses.filter((e) => e.date.startsWith(month));
   const expensesAmount = expensesInMonth.reduce((acc, e) => acc + e.amount, 0);
 
-  // Cash basis: a lot purchase is money out now; its cards come back as sales when sold.
+  // Cash basis: a lot purchase is money out now; its cards come back as stock sales.
   const reinvestment = purchases.filter((p) => p.date.startsWith(month)).reduce((acc, p) => acc + p.amount, 0);
+  const reinvestSold = inventory
+    .filter((i) => i.status === 'vendido' && inventorySoldDate(i).startsWith(month))
+    .reduce((acc, i) => acc + i.price, 0);
 
-  const totalRevenue = salesCollected + tournamentCash + tournamentProduct;
+  const totalRevenue = reinvestSold + tournamentCash + tournamentProduct;
   const totalCosts = tournamentCosts + expensesAmount + reinvestment;
   const net = totalRevenue - totalCosts;
-  const liquidNet = (salesCollected + tournamentCash) - totalCosts;
+  const liquidNet = (reinvestSold + tournamentCash) - totalCosts;
 
   return {
     month,
     monthLabel: formatMonthYear(month),
-    salesCollected,
-    salesBilled,
     tournamentCash,
     tournamentProduct,
     tournamentCosts,
     tournamentNet,
     expenses: expensesAmount,
     reinvestment,
+    reinvestSold,
     totalRevenue,
     totalCosts,
     net,
@@ -221,25 +225,22 @@ export function calculateMonthSummary(
 }
 
 export function getAllMonths(
-  sales: Sale[],
   tournaments: Tournament[],
   expenses: ExpenseItem[],
   today: IsoDate,
   purchases: Purchase[] = [],
+  inventory: InventoryItem[] = [],
 ): string[] {
   const set = new Set<string>();
   set.add(today.slice(0, 7));
-  for (const s of sales) {
-    if (s.createdAt) set.add(s.createdAt.slice(0, 7));
-    for (const p of s.payments) {
-      if (p.date) set.add(p.date.slice(0, 7));
-    }
-  }
   for (const t of tournaments) {
     if (t.date) set.add(t.date.slice(0, 7));
   }
   for (const e of [...expenses, ...purchases]) {
     if (e.date) set.add(e.date.slice(0, 7));
+  }
+  for (const i of inventory) {
+    if (i.status === 'vendido') set.add(inventorySoldDate(i).slice(0, 7));
   }
   return Array.from(set)
     .filter((m) => /^\d{4}-\d{2}$/.test(m))

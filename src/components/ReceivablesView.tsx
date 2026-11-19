@@ -76,6 +76,9 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({
   return (
     <div>
       {/* Mini balance de cobranzas */}
+      <p style={{ fontSize: '0.8rem', color: '#94a3b8', margin: '0 0 0.75rem' }}>
+        📌 Esto es un recordatorio de cobros: no suma ni resta en el Balance Total (esa plata ya cuenta como venta en Reinversión).
+      </p>
       <div className="kpi-grid">
         <div className="kpi-card colgado">
           <div className="kpi-label">Por Cobrar a Clientes</div>

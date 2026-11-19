@@ -4,6 +4,7 @@ import {
   calculateMonthSummary,
   getAllMonths,
   summarizeInventory,
+  summarizeReinvestment,
   todayIso,
 } from '../domain/ledger';
 import { seasonSummary } from '../domain/tournaments';
@@ -31,7 +32,7 @@ export const BalanceTotalView: React.FC<BalanceTotalViewProps> = ({
   const currentMonthKey = today.slice(0, 7);
 
   // Period selector: defaults to current month (YYYY-MM) or 'all'
-  const allMonths = getAllMonths(sales, tournaments, expenses, today, purchases);
+  const allMonths = getAllMonths(tournaments, expenses, today, purchases, inventory);
   const [selectedMonth, setSelectedMonth] = useState<string>(currentMonthKey);
 
   const isAllTime = selectedMonth === 'all';
@@ -39,48 +40,42 @@ export const BalanceTotalView: React.FC<BalanceTotalViewProps> = ({
   // Global receivables and inventory summaries
   const rec = summarizeReceivables(sales, today);
   const inv = summarizeInventory(inventory);
-  const totalMoneyOnHold = rec.outstanding + inv.totalValue;
+  const reinv = summarizeReinvestment(purchases, inventory);
 
   // Global tour & expenses (for all-time)
   const tourAll = seasonSummary(tournaments);
   const totalExpensesAll = expenses.reduce((acc, e) => acc + e.amount, 0);
-  const totalReinvestAll = purchases.reduce((acc, p) => acc + p.amount, 0);
 
   // Current selected month summary (or aggregate if all-time)
-  const monthData = calculateMonthSummary(
-    selectedMonth,
-    sales,
-    tournaments,
-    expenses,
-    purchases,
-  );
+  const monthData = calculateMonthSummary(selectedMonth, tournaments, expenses, purchases, inventory);
 
   // Active metrics depending on view (selected month vs all-time)
   const activeLabel = isAllTime ? 'Histórico Global Consolidado' : monthData.monthLabel;
-  const activeCollected = isAllTime ? rec.totalCollected : monthData.salesCollected;
   const activeTournamentCash = isAllTime ? tourAll.cashRevenue : monthData.tournamentCash;
   const activeTournamentProduct = isAllTime ? tourAll.productRevenue : monthData.tournamentProduct;
   const activeTournamentCosts = isAllTime ? tourAll.costs : monthData.tournamentCosts;
   const activeTournamentNet = isAllTime ? tourAll.net : monthData.tournamentNet;
   const activeExpenses = isAllTime ? totalExpensesAll : monthData.expenses;
-  const activeReinvest = isAllTime ? totalReinvestAll : monthData.reinvestment;
+  const activeReinvest = isAllTime ? reinv.invested : monthData.reinvestment;
+  const activeReinvestSold = isAllTime ? reinv.soldValue : monthData.reinvestSold;
+  const activeReinvestNet = activeReinvestSold - activeReinvest;
 
   const activeRevenue = isAllTime
-    ? rec.totalCollected + tourAll.revenue
+    ? reinv.soldValue + tourAll.revenue
     : monthData.totalRevenue;
   const activeCosts = isAllTime
-    ? tourAll.costs + totalExpensesAll + totalReinvestAll
+    ? tourAll.costs + totalExpensesAll + reinv.invested
     : monthData.totalCosts;
   const activeNet = isAllTime ? activeRevenue - activeCosts : monthData.net;
-  // The three pillars (one per tab) add up exactly to activeNet.
+  // The two pillars (Reinversión + Torneos) add up exactly to activeNet.
   const activeTorneos = activeTournamentNet - activeExpenses;
   const activeLiquid = isAllTime
-    ? (rec.totalCollected + tourAll.cashRevenue) - activeCosts
+    ? (reinv.soldValue + tourAll.cashRevenue) - activeCosts
     : monthData.liquidNet;
 
   // Monthly breakdown for all months in history
   const monthlyBreakdown = allMonths.map((m) =>
-    calculateMonthSummary(m, sales, tournaments, expenses, purchases),
+    calculateMonthSummary(m, tournaments, expenses, purchases, inventory),
   );
 
   return (
@@ -117,7 +112,7 @@ export const BalanceTotalView: React.FC<BalanceTotalViewProps> = ({
             }}
           >
             {allMonths.map((m) => {
-              const label = calculateMonthSummary(m, sales, tournaments, expenses).monthLabel;
+              const label = calculateMonthSummary(m, tournaments, expenses).monthLabel;
               return (
                 <option key={m} value={m}>
                   {m === currentMonthKey ? `⭐ Este Mes (${label})` : label}
@@ -225,36 +220,30 @@ export const BalanceTotalView: React.FC<BalanceTotalViewProps> = ({
             }}
           >
             <div style={{ fontSize: '0.75rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 600 }}>
-              Plata en Espera (no cuenta en el neto)
+              Recordatorio · no cuenta en el neto
             </div>
             <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#f59e0b', marginTop: '0.2rem' }}>
-              {formatGs(totalMoneyOnHold)}
+              {formatGs(rec.outstanding)}
             </div>
             <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.3rem', lineHeight: 1.4 }}>
-              💸 {formatGs(rec.outstanding)} por cobrar (Dinero Colgado)
+              💸 Por cobrar (Dinero Colgado): ya está contado como venta en Reinversión
               <br />
-              🔄 {formatGs(inv.totalValue)} en stock por vender (Reinversión)
+              🔄 {formatGs(inv.totalValue)} en stock por vender
             </div>
           </div>
         </div>
       </div>
 
-      {/* 3 pillars, one per tab: Dinero Colgado + Reinversión + Torneos = Balance Neto */}
+      {/* 2 pillars: Reinversión + Torneos = Balance Neto. Dinero Colgado is only a reminder. */}
       <div className="kpi-grid">
-        <div className="kpi-card cobrado" style={{ cursor: 'pointer' }} onClick={() => onNavigate('receivables')}>
-          <div className="kpi-label">💸 Dinero Colgado · Cobrado ({isAllTime ? 'Histórico' : 'En el Mes'})</div>
-          <div className="kpi-value" style={{ color: '#10b981' }}>
-            +{formatGs(activeCollected)}
-          </div>
-          <div className="kpi-subtitle">Falta cobrar: {formatGs(rec.outstanding)}</div>
-        </div>
-
-        <div className="kpi-card" style={{ borderColor: '#ef4444', cursor: 'pointer' }} onClick={() => onNavigate('reinvest')}>
+        <div className="kpi-card" style={{ borderColor: '#f59e0b', cursor: 'pointer' }} onClick={() => onNavigate('reinvest')}>
           <div className="kpi-label">🔄 Reinversión ({isAllTime ? 'Histórico' : 'En el Mes'})</div>
-          <div className="kpi-value" style={{ color: activeReinvest > 0 ? '#ef4444' : '#10b981' }}>
-            -{formatGs(activeReinvest)}
+          <div className="kpi-value" style={{ color: activeReinvestNet >= 0 ? '#10b981' : '#ef4444' }}>
+            {activeReinvestNet >= 0 ? `+${formatGs(activeReinvestNet)}` : formatGs(activeReinvestNet)}
           </div>
-          <div className="kpi-subtitle">Stock por vender: {formatGs(inv.totalValue)}</div>
+          <div className="kpi-subtitle">
+            Compras: -{formatGs(activeReinvest)} · Vendido: +{formatGs(activeReinvestSold)}
+          </div>
         </div>
 
         <div className="kpi-card torneos" style={{ cursor: 'pointer' }} onClick={() => onNavigate('tournaments')}>
@@ -274,7 +263,7 @@ export const BalanceTotalView: React.FC<BalanceTotalViewProps> = ({
           <span>📅 Historial &amp; Desglose Mes a Mes (Ganancias y Pérdidas)</span>
         </div>
         <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: '-0.5rem', marginBottom: '1rem' }}>
-          Cada mes = lo cobrado (Dinero Colgado) − lo reinvertido (Reinversión) ± Torneos y sus gastos.
+          Cada mes = Reinversión (vendido − comprado) ± Torneos y sus gastos. Dinero Colgado no suma: es solo para acordarte de cobrar.
         </p>
 
         <div className="table-wrapper">
@@ -282,7 +271,6 @@ export const BalanceTotalView: React.FC<BalanceTotalViewProps> = ({
             <thead>
               <tr>
                 <th>Mes</th>
-                <th style={{ textAlign: 'right' }}>💸 Cobrado</th>
                 <th style={{ textAlign: 'right' }}>🔄 Reinversión</th>
                 <th style={{ textAlign: 'right' }}>🏆 Torneos + Gastos</th>
                 <th style={{ textAlign: 'right' }}>Resultado Neto</th>
@@ -320,11 +308,16 @@ export const BalanceTotalView: React.FC<BalanceTotalViewProps> = ({
                         )}
                       </div>
                     </td>
-                    <td style={{ textAlign: 'right', color: '#10b981', fontWeight: 600 }}>
-                      +{formatGs(mb.salesCollected)}
-                    </td>
-                    <td style={{ textAlign: 'right', color: '#f87171' }}>
-                      -{formatGs(mb.reinvestment)}
+                    <td
+                      style={{
+                        textAlign: 'right',
+                        fontWeight: 600,
+                        color: mb.reinvestSold - mb.reinvestment >= 0 ? '#10b981' : '#f87171',
+                      }}
+                    >
+                      {mb.reinvestSold - mb.reinvestment >= 0
+                        ? `+${formatGs(mb.reinvestSold - mb.reinvestment)}`
+                        : formatGs(mb.reinvestSold - mb.reinvestment)}
                     </td>
                     <td
                       style={{
@@ -394,14 +387,14 @@ export const BalanceTotalView: React.FC<BalanceTotalViewProps> = ({
               </thead>
               <tbody>
                 <tr>
-                  <td>Ventas Efectivamente Cobradas</td>
+                  <td>Ventas de Stock</td>
                   <td>
                     <span className="badge" style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10b981' }}>
-                      💸 Dinero Colgado
+                      🔄 Reinversión
                     </span>
                   </td>
                   <td style={{ textAlign: 'right', fontWeight: 700, color: '#10b981' }}>
-                    +{formatGs(activeCollected)}
+                    +{formatGs(activeReinvestSold)}
                   </td>
                 </tr>
                 <tr>
@@ -449,7 +442,7 @@ export const BalanceTotalView: React.FC<BalanceTotalViewProps> = ({
                   </td>
                 </tr>
                 <tr>
-                  <td>Reinversión en Lotes / Stock</td>
+                  <td>Compras de Lotes / Stock</td>
                   <td>
                     <span className="badge" style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#f87171' }}>
                       🔄 Reinversión
@@ -517,7 +510,7 @@ export const BalanceTotalView: React.FC<BalanceTotalViewProps> = ({
                   💳 Cuentas por Cobrar a Clientes
                 </div>
                 <div style={{ fontSize: '0.8rem', color: '#cbd5e1', marginTop: '0.2rem' }}>
-                  Tienes <strong>{rec.outstanding > 0 ? formatGs(rec.outstanding) : '0 Gs'}</strong> pendientes de pago de ventas ya entregadas.
+                  Tienes <strong>{rec.outstanding > 0 ? formatGs(rec.outstanding) : '0 Gs'}</strong> por cobrar. Es un recordatorio: no suma al balance.
                 </div>
               </div>
             </div>

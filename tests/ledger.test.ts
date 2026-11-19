@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   calculateMonthSummary,
   collectedThisMonth,
+  getAllMonths,
   createSaleFromDraft,
   registerPayment,
   saleBalance,
@@ -153,17 +154,7 @@ describe('storage & resilience', () => {
 });
 
 describe('monthly balances & inventory stock', () => {
-  it('calculates monthly summary with sales, tournament prizes, and expenses', () => {
-    const s1 = sale({
-      createdAt: '2026-11-01',
-      total: 300_000,
-      payments: [{ id: 'p1', amount: 150_000, date: '2026-11-02' }],
-    });
-    const s2 = sale({
-      createdAt: '2026-10-15',
-      total: 200_000,
-      payments: [{ id: 'p2', amount: 200_000, date: '2026-10-16' }],
-    });
+  it('calculates monthly summary with tournament prizes, expenses and stock sales', () => {
     const tour1: Tournament = {
       id: 't1',
       name: 'Torneo Noviembre',
@@ -176,20 +167,19 @@ describe('monthly balances & inventory stock', () => {
       { id: 'e1', description: 'Fundas Katana', category: 'Accesorios', amount: 45_000, date: '2026-11-03' },
       { id: 'e2', description: 'Playmat', category: 'Accesorios', amount: 100_000, date: '2026-10-10' },
     ];
+    const sold = { id: 'i1', description: 'Mew ex', category: 'Carta Suelta', price: 150_000, status: 'vendido' as const, createdAt: '2026-10-30', soldAt: '2026-11-02' };
 
-    const nov = calculateMonthSummary('2026-11', [s1, s2], [tour1], expenses);
-    expect(nov.salesCollected).toBe(150_000);
+    const nov = calculateMonthSummary('2026-11', [tour1], expenses, [], [sold]);
+    expect(nov.reinvestSold).toBe(150_000);
     expect(nov.tournamentCash).toBe(80_000);
     expect(nov.tournamentProduct).toBe(50_000);
     expect(nov.tournamentCosts).toBe(30_000);
     expect(nov.expenses).toBe(45_000);
-    // totalRevenue = 150k + 80k + 50k = 280k
-    // totalCosts = 30k + 45k = 75k
-    // net = 280k - 75k = 205k
+    // revenue = 150k + 80k + 50k = 280k; costs = 30k + 45k = 75k
     expect(nov.totalRevenue).toBe(280_000);
     expect(nov.totalCosts).toBe(75_000);
     expect(nov.net).toBe(205_000);
-    expect(nov.liquidNet).toBe(155_000); // 150k + 80k - 75k = 155k
+    expect(nov.liquidNet).toBe(155_000); // 150k + 80k - 75k
   });
 
   it('summarizes inventory stock (available, reserved, sold)', () => {
@@ -224,21 +214,43 @@ describe('reinversión en lotes', () => {
   });
 
   it('counts the purchase as money out in its month only', () => {
-    expect(calculateMonthSummary('2026-11', [], [], [], [lot]).net).toBe(-180_000);
-    expect(calculateMonthSummary('2026-10', [], [], [], [lot]).reinvestment).toBe(0);
+    expect(calculateMonthSummary('2026-11', [], [], [lot]).net).toBe(-180_000);
+    expect(calculateMonthSummary('2026-10', [], [], [lot]).reinvestment).toBe(0);
   });
 });
 
-describe('balance total = 3 pestañas', () => {
-  it('cobrado − reinversión + (torneos − gastos) equals the month net', () => {
-    const sales = [{ id: 's', buyer: 'L', item: 'x', total: 200_000, createdAt: '2026-11-01', payments: [{ id: 'p', amount: 150_000, date: '2026-11-02' }] }];
-    const tournaments: Tournament[] = [
-      { id: 't', name: 'Liga', date: '2026-11-03', entryFee: 30_000, cashPrize: 50_000, productPrizes: [{ description: 'Sobres', quantity: 1, unitValue: 20_000 }] },
-    ];
-    const expenses = [{ id: 'e', description: 'fundas', category: 'Fundas', amount: 25_000, date: '2026-11-04' }];
-    const purchases = [{ id: 'l', description: 'lote', amount: 180_000, date: '2026-11-04' }];
-    const m = calculateMonthSummary('2026-11', sales, tournaments, expenses, purchases);
-    expect(m.salesCollected - m.reinvestment + (m.tournamentNet - m.expenses)).toBe(m.net);
-    expect(m.net).toBe(150_000 - 180_000 + (70_000 - 30_000 - 25_000));
+describe('balance total = Reinversión + Torneos (Dinero Colgado no suma)', () => {
+  const tournaments: Tournament[] = [
+    { id: 't', name: 'Liga', date: '2026-11-03', entryFee: 30_000, cashPrize: 50_000, productPrizes: [{ description: 'Sobres', quantity: 1, unitValue: 20_000 }] },
+  ];
+  const expenses = [{ id: 'e', description: 'fundas', category: 'Fundas', amount: 25_000, date: '2026-11-04' }];
+  const purchases = [{ id: 'l', description: 'lote', amount: 180_000, date: '2026-11-04' }];
+  const soldItem = { id: 'a', description: 'Vex', category: 'Carta Suelta', price: 200_000, status: 'vendido' as const, createdAt: '2026-11-04', soldAt: '2026-11-10' };
+
+  it('(vendido − comprado) + (torneos − gastos) equals the month net', () => {
+    const m = calculateMonthSummary('2026-11', tournaments, expenses, purchases, [soldItem]);
+    expect(m.reinvestSold - m.reinvestment + (m.tournamentNet - m.expenses)).toBe(m.net);
+    expect(m.net).toBe(200_000 - 180_000 + (70_000 - 30_000 - 25_000));
+  });
+
+  it('a sale on credit changes nothing in the balance: collecting the debt does not count twice', () => {
+    const before = calculateMonthSummary('2026-11', tournaments, expenses, purchases, [soldItem]).net;
+    // Same stock sale sits in Dinero Colgado; the debt and its payments live only in `sales`.
+    const debt = sale({ total: 200_000, payments: [{ id: 'p', amount: 200_000, date: '2026-11-12' }] });
+    expect(saleBalance(debt)).toBe(0);
+    // calculateMonthSummary has no `sales` input at all: the net cannot move.
+    expect(calculateMonthSummary('2026-11', tournaments, expenses, purchases, [soldItem]).net).toBe(before);
+  });
+
+  it('counts a stock sale in the month it was sold, falling back to the stocking date for old data', () => {
+    const legacy = { ...soldItem, id: 'old', soldAt: undefined, createdAt: '2026-10-05' };
+    expect(calculateMonthSummary('2026-11', [], [], [], [soldItem, legacy]).reinvestSold).toBe(200_000);
+    expect(calculateMonthSummary('2026-10', [], [], [], [soldItem, legacy]).reinvestSold).toBe(200_000);
+  });
+
+  it('ignores stock that is not sold yet and lists sale months', () => {
+    const open = { ...soldItem, id: 'o', status: 'disponible' as const, soldAt: undefined };
+    expect(calculateMonthSummary('2026-11', [], [], [], [open]).reinvestSold).toBe(0);
+    expect(getAllMonths([], [], '2026-12-01', [], [soldItem])).toEqual(['2026-12', '2026-11']);
   });
 });
